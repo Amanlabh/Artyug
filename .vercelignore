@@ -1,0 +1,48 @@
+# Flutter/Dart
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+*.dart.js
+*.dart.js.map
+*.info.json
+
+# Android
+android/
+*.apk
+*.aab
+*.jks
+*.keystore
+key.properties
+
+# iOS
+ios/
+*.ipa
+*.app
+
+# macOS
+macos/
+
+# Windows
+windows/
+
+# Linux
+linux/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Git
+.git/
+.gitignore
+
+# Other
+.DS_Store
+*.log
+node_modules/
+
