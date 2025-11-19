@@ -21,6 +21,7 @@ import '../screens/communities/create_community_screen.dart';
 import '../screens/notifications/notifications_screen.dart';
 import '../screens/premium/premium_screen.dart';
 import '../screens/tickets/tickets_screen.dart';
+import '../screens/nft/nft_screen.dart';
 
 class AppRouter {
   static final GoRouter router = GoRouter(
@@ -106,6 +107,10 @@ class AppRouter {
       GoRoute(
         path: '/tickets',
         builder: (context, state) => const TicketsScreen(),
+      ),
+      GoRoute(
+        path: '/nft',
+        builder: (context, state) => const NFTScreen(),
       ),
     ],
   );

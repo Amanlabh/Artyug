@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:go_router/go_router.dart';
 
 import 'config/supabase_config.dart';
 import 'providers/auth_provider.dart';
+import 'providers/theme_provider.dart';
 import 'router/app_router.dart';
 import 'services/gemini_ai_service.dart';
 
@@ -38,22 +38,19 @@ class MyApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
       ],
-      child: MaterialApp.router(
-        title: 'ArtYug',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          primarySwatch: Colors.deepPurple,
-          primaryColor: const Color(0xFF8b5cf6),
-          scaffoldBackgroundColor: Colors.white,
-          fontFamily: 'System',
-          useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF8b5cf6),
-            brightness: Brightness.light,
-          ),
-        ),
-        routerConfig: AppRouter.router,
+      child: Consumer<ThemeProvider>(
+        builder: (context, themeProvider, _) {
+          return MaterialApp.router(
+            title: 'ArtYug',
+            debugShowCheckedModeBanner: false,
+            theme: themeProvider.lightTheme,
+            darkTheme: themeProvider.darkTheme,
+            themeMode: themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+            routerConfig: AppRouter.router,
+          );
+        },
       ),
     );
   }

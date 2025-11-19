@@ -27,6 +27,9 @@ class AuthProvider with ChangeNotifier {
 
         if (event == AuthChangeEvent.signedIn) {
           _user = session?.user;
+          if (_user != null) {
+            _ensureProfileExists(_user!.id);
+          }
         } else if (event == AuthChangeEvent.signedOut) {
           _user = null;
         }
@@ -38,6 +41,29 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
+  Future<void> _ensureProfileExists(String userId) async {
+    try {
+      // Non-blocking profile creation - don't wait for completion
+      _supabase.from('profiles').insert({
+        'id': userId,
+        'username': _user?.email?.split('@')[0] ?? 'user_${userId.substring(0, 8)}',
+        'display_name': _user?.userMetadata?['display_name'] ?? 
+                       _user?.email?.split('@')[0] ?? 
+                       'User',
+        'created_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
+      }).select().single().then((_) {
+        debugPrint('Profile created for $userId');
+      }).catchError((e) {
+        // Ignore errors - profile likely already exists
+        debugPrint('Profile creation (non-blocking) for $userId: $e');
+      });
+    } catch (e) {
+      // Silently fail - profile might be created by trigger or already exists
+      debugPrint('Profile creation error (non-blocking): $e');
+    }
+  }
+
   Future<AuthResponse> signInWithEmail(String email, String password) async {
     try {
       final response = await _supabase.auth.signInWithPassword(
@@ -45,6 +71,9 @@ class AuthProvider with ChangeNotifier {
         password: password,
       );
       _user = response.user;
+      if (_user != null) {
+        await _ensureProfileExists(_user!.id);
+      }
       notifyListeners();
       return response;
     } catch (e) {
@@ -59,6 +88,9 @@ class AuthProvider with ChangeNotifier {
         password: password,
       );
       _user = response.user;
+      if (_user != null) {
+        await _ensureProfileExists(_user!.id);
+      }
       notifyListeners();
       return response;
     } catch (e) {

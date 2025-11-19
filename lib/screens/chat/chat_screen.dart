@@ -23,6 +23,7 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _conversationId;
   bool _loading = true;
   bool _sending = false;
+  bool _processingDealAction = false;
   RealtimeChannel? _subscription;
 
   @override
@@ -247,6 +248,205 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> _sendTemplateMessage(String content) async {
+    if (_conversationId == null) return;
+    final user = Provider.of<AuthProvider>(context, listen: false).user;
+    if (user == null) return;
+
+    try {
+      await _supabase.from('messages').insert({
+        'conversation_id': _conversationId!,
+        'sender_id': user.id,
+        'content': content,
+      });
+      await _supabase
+          .from('conversations')
+          .update({'updated_at': DateTime.now().toIso8601String()})
+          .eq('id', _conversationId!);
+    } catch (_) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to update deal status')),
+      );
+    }
+  }
+
+  Future<void> _confirmDealCompletion() async {
+    if (_processingDealAction) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Mark Deal as Done?'),
+        content: const Text(
+          'This will send a confirmation in the chat so both parties have a record of the completed purchase.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Yes, Done'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _processingDealAction = true);
+    await _sendTemplateMessage('✅ Deal completed! Thank you for the purchase.');
+    setState(() => _processingDealAction = false);
+  }
+
+  void _showPaymentOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Send Payment Details',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Pick an option to automatically share payment information in chat.',
+                  style: TextStyle(color: Colors.black54),
+                ),
+                const SizedBox(height: 20),
+                _paymentOptionTile(
+                  icon: Icons.qr_code_2,
+                  title: 'Share UPI / QR',
+                  subtitle: 'Send a note to pay via UPI apps',
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _sendTemplateMessage(
+                      '💸 Pay via UPI: Please use my UPI ID / QR to complete the payment.',
+                    );
+                  },
+                ),
+                _paymentOptionTile(
+                  icon: Icons.account_balance,
+                  title: 'Share Bank Transfer',
+                  subtitle: 'Send a reminder to transfer via bank',
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _sendTemplateMessage(
+                      '🏦 Bank transfer preferred. I will share account details privately.',
+                    );
+                  },
+                ),
+                _paymentOptionTile(
+                  icon: Icons.payments,
+                  title: 'Custom Payment Link',
+                  subtitle: 'Paste a Razorpay/Stripe link',
+                  onTap: () async {
+                    Navigator.of(context).pop();
+                    final link = await _askForPaymentLink();
+                    if (link != null && link.trim().isNotEmpty) {
+                      _sendTemplateMessage('🔗 Pay here: $link');
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<String?> _askForPaymentLink() async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Enter Payment Link'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            hintText: 'https://...',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(context).pop(controller.text.trim()),
+            child: const Text('Share'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result;
+  }
+
+  Widget _paymentOptionTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: CircleAvatar(
+        backgroundColor: const Color(0xFF8b5cf6).withOpacity(0.1),
+        child: Icon(icon, color: const Color(0xFF8b5cf6)),
+      ),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+      subtitle: Text(subtitle),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: onTap,
+    );
+  }
+
+  Widget _buildDealActions() {
+    if (_conversationId == null) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: FilledButton.icon(
+              icon: const Icon(Icons.verified),
+              label: _processingDealAction
+                  ? const Text('Saving...')
+                  : const Text('Deal Done'),
+              onPressed: _processingDealAction ? null : _confirmDealCompletion,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.payment),
+              label: const Text('Pay Now'),
+              onPressed: _showPaymentOptions,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMessageBubble(Map<String, dynamic> message) {
     final user = Provider.of<AuthProvider>(context).user;
     final isOwnMessage = message['sender_id'] == user?.id;
@@ -367,6 +567,7 @@ class _ChatScreenState extends State<ChatScreen> {
           : Column(
               children: [
                 // Messages List
+                _buildDealActions(),
                 Expanded(
                   child: _messages.isEmpty
                       ? const Center(

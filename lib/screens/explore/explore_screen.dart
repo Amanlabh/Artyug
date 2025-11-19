@@ -436,22 +436,281 @@ class _ExploreScreenState extends State<ExploreScreen> {
   Widget _categoryCard(Map<String, String> cat) {
     final color = Color(int.parse(cat['color']!.substring(1), radix: 16) + 0xFF000000);
 
-    return _glassContainer(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(cat['icon']!, style: const TextStyle(fontSize: 32)),
-          const SizedBox(height: 10),
-          Text(
-            cat['name']!,
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
+    return GestureDetector(
+      onTap: () => _handleCategoryTap(cat),
+      child: _glassContainer(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(cat['icon']!, style: const TextStyle(fontSize: 32)),
+            const SizedBox(height: 10),
+            Text(
+              cat['name']!,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _handleCategoryTap(Map<String, String> category) {
+    final categoryId = category['id']!.toLowerCase();
+    final categoryName = category['name']!.toLowerCase();
+
+    final filteredPaintings = _paintings.where((painting) {
+      if (categoryId == 'all') return true;
+      final paintingCategory =
+          (painting['category'] ?? '').toString().toLowerCase();
+      return paintingCategory == categoryId || paintingCategory == categoryName;
+    }).toList();
+
+    if (filteredPaintings.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No ${category['name']} content available yet.'),
+          backgroundColor: Colors.purpleAccent.withOpacity(0.8),
+        ),
+      );
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _buildCategoryDetailsSheet(
+        title: category['name']!,
+        items: filteredPaintings,
+      ),
+    );
+  }
+
+  Widget _buildCategoryDetailsSheet({
+    required String title,
+    required List<Map<String, dynamic>> items,
+  }) {
+    return DraggableScrollableSheet(
+      expand: false,
+      maxChildSize: 0.9,
+      initialChildSize: 0.7,
+      builder: (context, scrollController) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.black87,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  "$title Art",
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: ListView.builder(
+                    controller: scrollController,
+                    itemCount: items.length,
+                    itemBuilder: (_, index) => Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: _detailedPaintingTile(items[index]),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _detailedPaintingTile(Map<String, dynamic> painting) {
+    final profile = painting['profiles'] ?? {};
+    final bool isForSale =
+        painting['is_for_sale'] == true || painting['price'] != null;
+    final priceText =
+        painting['price'] != null ? "₹${painting['price']}" : 'Price on request';
+    final description = (painting['description'] ?? '').toString();
+
+    return _glassContainer(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: CachedNetworkImage(
+                  imageUrl: painting['image_url'] ?? '',
+                  width: 90,
+                  height: 90,
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) => Container(
+                    width: 90,
+                    height: 90,
+                    color: Colors.white12,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      painting['title'] ?? 'Untitled',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 2,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      "by ${profile['display_name'] ?? profile['username'] ?? 'Unknown'}",
+                      style: const TextStyle(
+                        color: Colors.white60,
+                        fontSize: 12,
+                      ),
+                    ),
+                    if (description.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          description,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              if (isForSale)
+                Text(
+                  priceText,
+                  style: const TextStyle(
+                    color: Colors.purpleAccent,
+                    fontWeight: FontWeight.bold,
+                  ),
+                )
+              else
+                const Text(
+                  "Not for sale",
+                  style: TextStyle(color: Colors.white54),
+                ),
+              const Spacer(),
+              Text(
+                "${painting['likes_count']} likes",
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+              if (isForSale) ...[
+                const SizedBox(width: 12),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.purpleAccent,
+                    foregroundColor: Colors.black,
+                  ),
+                  onPressed: () => _handleBuyNow(painting),
+                  child: const Text('Buy Now'),
+                ),
+              ],
+            ],
           ),
         ],
       ),
+    );
+  }
+
+  void _handleBuyNow(Map<String, dynamic> painting) {
+    final profile = painting['profiles'] ?? {};
+    final artistId = profile['id']?.toString();
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF141226),
+          title: Text(
+            "Purchase ${painting['title'] ?? 'Artwork'}",
+            style: const TextStyle(color: Colors.white),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (painting['price'] != null)
+                Text(
+                  "Price: ₹${painting['price']}",
+                  style: const TextStyle(
+                    color: Colors.purpleAccent,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              const SizedBox(height: 8),
+              Text(
+                "You can connect with the artist to complete your purchase.",
+                style: const TextStyle(color: Colors.white70, fontSize: 14),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text(
+                'Close',
+                style: TextStyle(color: Colors.white70),
+              ),
+            ),
+            if (artistId != null)
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.purpleAccent,
+                  foregroundColor: Colors.black,
+                ),
+                onPressed: () {
+                  Navigator.of(dialogContext).pop();
+                  context.push('/chat/$artistId');
+                },
+                child: const Text('Contact Artist'),
+              ),
+          ],
+        );
+      },
     );
   }
 
@@ -492,6 +751,16 @@ class _ExploreScreenState extends State<ExploreScreen> {
                           },
                         ),
                       ),
+
+                      if (_searchLoading)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 12),
+                          child: LinearProgressIndicator(
+                            color: Colors.purpleAccent,
+                            backgroundColor: Colors.white12,
+                            minHeight: 4,
+                          ),
+                        ),
 
                       const SizedBox(height: 28),
 

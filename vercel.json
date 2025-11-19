@@ -38,7 +38,14 @@
       ]
     },
     {
-      "source": "/(.*\\.(js|css|woff2?|png|jpg|jpeg|gif|svg|ico))",
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "header",
+          "key": "content-type",
+          "value": "(js|css|woff|woff2|png|jpg|jpeg|gif|svg|ico)"
+        }
+      ],
       "headers": [
         {
           "key": "Cache-Control",
