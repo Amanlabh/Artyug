@@ -11,11 +11,14 @@ fi
 # Verify Flutter installation
 flutter --version
 
+# Ensure stale generated files don't break plugin registration
+rm -rf .dart_tool build
+
 # Get dependencies
 flutter pub get
 
 # Build for web
-flutter build web --release
+flutter build web --release --no-wasm-dry-run
 
 echo "Build completed successfully!"
 
