@@ -220,9 +220,50 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   List<PaintingModel> _ecoFeedPreview(List<PaintingModel> all) {
+    // Apply chip filter first
+    final filtered = _applyChipFilter(all);
     // Only show artworks with valid media in the main feed.
-    final withMedia = all.where((p) => p.resolvedImageUrl.trim().isNotEmpty);
+    final withMedia = filtered.where((p) => p.resolvedImageUrl.trim().isNotEmpty);
     return withMedia.take(7).toList();
+  }
+
+  /// Filters paintings based on the selected chip index.
+  List<PaintingModel> _applyChipFilter(List<PaintingModel> paintings) {
+    switch (_selectedChip) {
+      case 0: // All
+        return paintings;
+      case 1: // Trending — sort by likes
+        final sorted = List<PaintingModel>.from(paintings)
+          ..sort((a, b) => b.likesCount.compareTo(a.likesCount));
+        return sorted;
+      case 2: // Verified — Only artworks by verified artists
+        return paintings.where((p) => p.artistIsVerified == true).toList();
+      case 3: // Live Drops — boosted or very recent (last 24h)
+        final cutoff = DateTime.now().subtract(const Duration(hours: 24));
+        return paintings.where((p) {
+          if (p.isBoosted) return true;
+          if (p.createdAt != null && p.createdAt!.isAfter(cutoff)) return true;
+          return false;
+        }).toList();
+      case 4: // Photography
+        return paintings.where((p) =>
+          (p.category?.toLowerCase().contains('photo') ?? false) ||
+          (p.styleTags?.any((t) => t.toLowerCase().contains('photo')) ?? false)
+        ).toList();
+      case 5: // Digital
+        return paintings.where((p) =>
+          (p.category?.toLowerCase().contains('digital') ?? false) ||
+          (p.medium?.toLowerCase().contains('digital') ?? false) ||
+          (p.styleTags?.any((t) => t.toLowerCase().contains('digital')) ?? false)
+        ).toList();
+      case 6: // Abstract
+        return paintings.where((p) =>
+          (p.category?.toLowerCase().contains('abstract') ?? false) ||
+          (p.styleTags?.any((t) => t.toLowerCase().contains('abstract')) ?? false)
+        ).toList();
+      default:
+        return paintings;
+    }
   }
 
   void _openEcosystemShowMore(BuildContext context, FeedProvider feed) async {
@@ -314,9 +355,12 @@ class _FeedScreenState extends State<FeedScreen> {
                   child: Padding(
                     padding: EdgeInsets.fromLTRB(hPad, 20, hPad, 10),
                     child: _SectionHeader(
-                      title: 'Ecosystem Feed',
-                      subtitle:
-                          'Fresh artworks from Artyug creators and communities',
+                      title: _selectedChip == 0
+                          ? 'Ecosystem Feed'
+                          : '${_chips[_selectedChip]} Feed',
+                      subtitle: _selectedChip == 0
+                          ? 'Fresh artworks from Artyug creators and communities'
+                          : 'Filtered by ${_chips[_selectedChip].toLowerCase()}',
                       actionLabel: 'Show more',
                       onActionTap: () => _openEcosystemShowMore(context, feed),
                     ),

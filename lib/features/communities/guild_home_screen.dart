@@ -106,13 +106,24 @@ class _GuildHomeScreenState extends State<GuildHomeScreen>
       } else {
         await Supabase.instance.client
             .from('community_members')
-            .insert({'user_id': userId, 'community_id': guild.id});
+            .insert({
+              'user_id': userId,
+              'community_id': guild.id,
+              'role': 'member',
+            });
         setState(() => _myGuilds.add(guild));
       }
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
+        final msg = e.toString();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not update membership')),
+          SnackBar(
+            content: Text(
+              msg.contains('23505')
+                  ? 'You are already a member of this guild'
+                  : 'Could not update membership',
+            ),
+          ),
         );
       }
     }
