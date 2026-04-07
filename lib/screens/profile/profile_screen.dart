@@ -1,12 +1,16 @@
-
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
+import '../../core/theme/app_colors.dart';
 import '../../providers/auth_provider.dart';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Profile Screen — My Profile
+// Design: cream bg, orange accent, black text. Editorial-brutalist.
+// ─────────────────────────────────────────────────────────────────────────────
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -15,15 +19,15 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
-  final SupabaseClient _supabase = Supabase.instance.client;
+class _ProfileScreenState extends State<ProfileScreen>
+    with SingleTickerProviderStateMixin {
+  final _supabase = Supabase.instance.client;
+
   Map<String, dynamic>? _profile;
   List<Map<String, dynamic>> _paintings = [];
   List<Map<String, dynamic>> _threads = [];
   bool _loading = true;
   String _activeTab = 'gallery';
-  bool _isFollowing = false;
-  bool _followLoading = false;
   int _followersCount = 0;
   int _followingCount = 0;
 
@@ -34,12 +38,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadProfile() async {
-    final user = Provider.of<AuthProvider>(context, listen: false).user;
+    final user =
+        Provider.of<AuthProvider>(context, listen: false).user;
     if (user == null) {
       setState(() => _loading = false);
       return;
     }
-
     await Future.wait([
       _fetchProfile(user.id),
       _fetchPaintings(user.id),
@@ -50,384 +54,391 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _fetchProfile(String userId) async {
     try {
-      final response = await _supabase
+      final res = await _supabase
           .from('profiles')
           .select('*')
           .eq('id', userId)
           .single();
-
       setState(() {
-        _profile = response as Map<String, dynamic>;
+        _profile = Map<String, dynamic>.from(res);
         _loading = false;
       });
-    } catch (e) {
+    } catch (_) {
       setState(() => _loading = false);
     }
   }
 
   Future<void> _fetchPaintings(String userId) async {
     try {
-      final user = Provider.of<AuthProvider>(context, listen: false).user;
-
-      final response = await _supabase
+      final res = await _supabase
           .from('paintings')
-          .select('''
-            *,
-            profiles:artist_id (
-              id,
-              username,
-              display_name,
-              profile_picture_url,
-              artist_type
-            )
-          ''')
+          .select('id, title, image_url, price_inr, is_available')
           .eq('artist_id', userId)
           .order('created_at', ascending: false);
-
-      final paintingsData = List<Map<String, dynamic>>.from(response);
-
-      final paintingsWithLikes = await Future.wait(
-        paintingsData.map((painting) async {
-          final likesResponse = await _supabase
-              .from('painting_likes')
-              .select('id')
-              .eq('painting_id', painting['id']);
-
-          final likesCount = (likesResponse as List).length;
-
-          bool isLiked = false;
-          if (user?.id != null) {
-            final userLikeResponse = await _supabase
-                .from('painting_likes')
-                .select('id')
-                .eq('painting_id', painting['id'])
-                .eq('user_id', user!.id)
-                .maybeSingle();
-            isLiked = userLikeResponse != null;
-          }
-
-          return {
-            ...painting,
-            'likes_count': likesCount,
-            'is_liked': isLiked,
-          };
-        }),
-      );
-
-      setState(() {
-        _paintings = paintingsWithLikes;
-      });
-    } catch (e) {
-      setState(() {
-        _paintings = [];
-      });
-    }
+      setState(() => _paintings = List<Map<String, dynamic>>.from(res));
+    } catch (_) {}
   }
 
   Future<void> _fetchThreads(String userId) async {
     try {
-      final response = await _supabase
+      final res = await _supabase
           .from('community_posts')
-          .select('*')
+          .select('id, title, content, created_at')
           .eq('author_id', userId)
           .order('created_at', ascending: false);
-
-      setState(() {
-        _threads = List<Map<String, dynamic>>.from(response);
-      });
-    } catch (e) {
-      setState(() {
-        _threads = [];
-      });
-    }
+      setState(() => _threads = List<Map<String, dynamic>>.from(res));
+    } catch (_) {}
   }
 
   Future<void> _fetchFollowStats(String userId) async {
     try {
-      final followersResponse = await _supabase
+      final followers = await _supabase
           .from('follows')
           .select('id')
           .eq('following_id', userId);
-
-      final followingResponse = await _supabase
+      final following = await _supabase
           .from('follows')
           .select('id')
           .eq('follower_id', userId);
-
       setState(() {
-        _followersCount = (followersResponse as List).length;
-        _followingCount = (followingResponse as List).length;
+        _followersCount = (followers as List).length;
+        _followingCount = (following as List).length;
       });
-    } catch (e) {
-      // Ignore errors
-    }
+    } catch (_) {}
   }
 
-  // ----------------- DN3 THEME HELPERS -----------------
-
-  Widget glassContainer({required Widget child, double radius = 20}) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(radius),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(radius),
-            gradient: LinearGradient(
-              colors: [
-                Colors.white.withOpacity(0.06),
-                Colors.white.withOpacity(0.03),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            border: Border.all(
-              color: Colors.purpleAccent.withOpacity(0.35),
-              width: 1.1,
-            ),
-          ),
-          child: child,
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return Scaffold(
+        backgroundColor: AppColors.canvas(context),
+        body: const Center(
+          child: CircularProgressIndicator(
+              color: AppColors.primary, strokeWidth: 2),
         ),
-      ),
-    );
-  }
+      );
+    }
 
-  Widget neonText(String text,
-      {double size = 14, FontWeight weight = FontWeight.w600}) {
-    return Text(
-      text,
-      style: TextStyle(
-        color: Colors.purpleAccent,
-        fontSize: size,
-        fontWeight: weight,
-      ),
-    );
-  }
+    final displayName = _profile?['display_name'] ??
+        _profile?['username'] ??
+        Provider.of<AuthProvider>(context, listen: false)
+            .user
+            ?.email
+            ?.split('@')[0] ??
+        'Artist';
 
-  // ----------------- UI COMPONENTS (DN3) -----------------
+    final username = _profile?['username'] ?? '';
+    final role = _profile?['role'] as String? ?? '';
+    final bio = _profile?['bio'] as String?;
+    final avatarUrl = _profile?['profile_picture_url'] as String?;
+    final coverUrl = _profile?['cover_image_url'] as String?;
+    final initial = displayName[0].toUpperCase();
 
-  Widget _buildPaintingItem(Map<String, dynamic> painting) {
-    return Container(
-      margin: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: const Color(0xff0f0f0f),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.purpleAccent.withOpacity(0.25), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.4),
-            blurRadius: 6,
-            offset: const Offset(0, 3),
-          )
-        ],
-      ),
-      child: Stack(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(14),
-            child: painting['image_url'] != null
-                ? CachedNetworkImage(
-                    imageUrl: painting['image_url'] as String,
-                    width: double.infinity,
-                    height: double.infinity,
-                    fit: BoxFit.cover,
-                  )
-                : Container(
-                    color: Colors.grey[850],
-                    child: const Center(
-                      child: Text("🎨", style: TextStyle(fontSize: 48)),
-                    ),
+    return Scaffold(
+      backgroundColor: AppColors.canvas(context),
+      body: CustomScrollView(
+        slivers: [
+          // ── App Bar ────────────────────────────────────────────────────
+          SliverAppBar(
+            backgroundColor: AppColors.canvas(context),
+            elevation: 0,
+            surfaceTintColor: Colors.transparent,
+            floating: true,
+            snap: true,
+            title: RichText(
+              text: TextSpan(children: [
+                TextSpan(
+                  text: 'My Profile',
+                  style: TextStyle(
+                    color: AppColors.textPrimaryOf(context),
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
                   ),
+                ),
+              ]),
+            ),
+            actions: [
+              IconButton(
+                icon: Icon(Icons.settings_outlined,
+                    color: AppColors.textPrimaryOf(context), size: 22),
+                onPressed: () => context.push('/settings'),
+              ),
+            ],
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(1),
+              child: Container(
+                  height: 1,
+                  color: AppColors.borderOf(context).withValues(alpha: 0.5)),
+            ),
           ),
 
-          // Likes badge
-          Positioned(
-            bottom: 8,
-            left: 8,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.55),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                    color: Colors.purpleAccent.withOpacity(0.45), width: 1),
-              ),
-              child: Row(
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    painting['is_liked'] == true ? "❤️" : "🤍",
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    "${painting['likes_count'] ?? 0}",
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
+                  // ── Header card (banner + row — matches edit profile) ─
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceOf(context),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppColors.borderOf(context)),
                     ),
-                  )
+                    clipBehavior: Clip.antiAlias,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (coverUrl != null && coverUrl.isNotEmpty)
+                          SizedBox(
+                            height: 108,
+                            width: double.infinity,
+                            child: CachedNetworkImage(
+                              imageUrl: coverUrl,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Avatar
+                        Stack(
+                          children: [
+                            Container(
+                              width: 72,
+                              height: 72,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: AppColors.primary.withValues(alpha: 0.12),
+                                border: Border.all(
+                                    color: AppColors.primary.withValues(alpha: 0.3),
+                                    width: 2),
+                              ),
+                              child: avatarUrl != null
+                                  ? ClipOval(
+                                      child: CachedNetworkImage(
+                                        imageUrl: avatarUrl,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    )
+                                  : Center(
+                                      child: Text(
+                                        initial,
+                                        style: const TextStyle(
+                                          color: AppColors.primary,
+                                          fontSize: 28,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                    ),
+                            ),
+                            // Verified dot
+                            if (_profile?['is_verified'] == true)
+                              Positioned(
+                                bottom: 0,
+                                right: 0,
+                                child: Container(
+                                  width: 20,
+                                  height: 20,
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.success,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.check,
+                                      size: 12, color: Colors.white),
+                                ),
+                              ),
+                          ],
+                        ),
+
+                        const SizedBox(width: 16),
+
+                        // Name + username + role badge + bio
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Name row
+                              Row(children: [
+                                Flexible(
+                                  child: Text(
+                                    displayName,
+                                    style: TextStyle(
+                                      color: AppColors.textPrimaryOf(context),
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: -0.3,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ]),
+
+                              if (username.isNotEmpty)
+                                Text('@$username',
+                                    style: TextStyle(
+                                        color: AppColors.textSecondaryOf(context),
+                                        fontSize: 13)),
+
+                              if (role.isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 9, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: role == 'creator'
+                                        ? AppColors.primary.withValues(alpha: 0.1)
+                                        : AppColors.info.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(100),
+                                    border: Border.all(
+                                      color: role == 'creator'
+                                          ? AppColors.primary.withValues(alpha: 0.3)
+                                          : AppColors.info.withValues(alpha: 0.3),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    role == 'creator' ? '🎨 Creator' : '🖼 Collector',
+                                    style: TextStyle(
+                                      color: role == 'creator'
+                                          ? AppColors.primary
+                                          : AppColors.info,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+
+                              if (bio != null && bio.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  bio,
+                                  style: TextStyle(
+                                      color: AppColors.textSecondaryOf(context),
+                                      fontSize: 13,
+                                      height: 1.4),
+                                  maxLines: 3,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+                  const SizedBox(height: 12),
+
+                  // ── Stats row ───────────────────────────────────────
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _StatCard(
+                            label: 'Artworks',
+                            value: '${_paintings.length}'),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _StatCard(
+                            label: 'Followers',
+                            value: '$_followersCount'),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _StatCard(
+                            label: 'Following',
+                            value: '$_followingCount'),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // ── Edit Profile button ──────────────────────────────
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => context.push('/edit-profile'),
+                          icon: const Icon(Icons.edit_outlined, size: 16),
+                          label: const Text('Edit Profile'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.textPrimaryOf(context),
+                            side: BorderSide(color: AppColors.borderOf(context)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Upload CTA for creators
+                      if (role == 'creator')
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () => context.push('/upload'),
+                            icon: const Icon(Icons.add, size: 16),
+                            label: const Text('Upload Art'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                              elevation: 0,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // ── Tabs ─────────────────────────────────────────────
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceMutedOf(context),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        _TabBtn(
+                            label: 'Gallery',
+                            active: _activeTab == 'gallery',
+                            onTap: () =>
+                                setState(() => _activeTab = 'gallery')),
+                        _TabBtn(
+                            label: 'Threads',
+                            active: _activeTab == 'threads',
+                            onTap: () =>
+                                setState(() => _activeTab = 'threads')),
+                        _TabBtn(
+                            label: 'About',
+                            active: _activeTab == 'about',
+                            onTap: () =>
+                                setState(() => _activeTab = 'about')),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // ── Tab content ──────────────────────────────────────
+                  _buildTabContent(),
+
+                  const SizedBox(height: 100),
                 ],
               ),
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildThreadCard(Map<String, dynamic> thread) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: glassContainer(
-        radius: 18,
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (thread['title'] != null && thread['title'].toString().trim().isNotEmpty)
-                Text(
-                  thread['title'] as String,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-
-              if (thread['content'] != null && thread['content'].toString().trim().isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    thread['content'] as String,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 14,
-                    ),
-                  ),
-                ),
-
-              if (thread['images'] != null &&
-                  thread['images'] is List &&
-                  (thread['images'] as List).isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: SizedBox(
-                    height: 110,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: (thread['images'] as List).length,
-                      itemBuilder: (context, index) => Container(
-                        margin: const EdgeInsets.only(right: 10),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: CachedNetworkImage(
-                            imageUrl: (thread['images'] as List)[index] as String,
-                            width: 120,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAboutSection() {
-    return glassContainer(
-      radius: 22,
-      child: Padding(
-        padding: const EdgeInsets.all(22),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            neonText("About", size: 20),
-            const SizedBox(height: 14),
-
-            Text(
-              _profile?['bio'] as String? ?? "No bio added.",
-              style: const TextStyle(color: Colors.white70, fontSize: 15),
-            ),
-
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _statItem("Followers", _followersCount),
-                _statItem("Following", _followingCount),
-                _statItem("Artworks", _paintings.length),
-              ],
-            ),
-
-            if (_profile?['artist_type'] != null) ...[
-              const SizedBox(height: 24),
-              neonText("Artist Type: ${''}${_profile!['artist_type']}")
-            ],
-
-            if (_profile?['location'] != null) ...[
-              const SizedBox(height: 12),
-              neonText("Location: ${_profile!['location']}")
-            ],
-
-            if (_profile?['website'] != null) ...[
-              const SizedBox(height: 12),
-              neonText("Website: ${_profile!['website']}")
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _statItem(String label, int value) {
-    return Column(
-      children: [
-        Text(
-          "$value",
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        Text(
-          label,
-          style: const TextStyle(color: Colors.white54),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTabButton(String tab, String label) {
-    final active = _activeTab == tab;
-
-    return GestureDetector(
-      onTap: () => setState(() => _activeTab = tab),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: active ? Colors.purpleAccent.withOpacity(0.3) : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: active
-                ? Colors.purpleAccent
-                : Colors.purpleAccent.withOpacity(0.2),
-            width: 1,
-          ),
-        ),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: active ? Colors.purpleAccent : Colors.white60,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
       ),
     );
   }
@@ -435,211 +446,374 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildTabContent() {
     switch (_activeTab) {
       case 'gallery':
-        return _paintings.isEmpty
-            ? const Padding(
-                padding: EdgeInsets.only(top: 80),
-                child: Text(
-                  "🎨 No artwork yet",
-                  style: TextStyle(color: Colors.white54, fontSize: 18),
-                  textAlign: TextAlign.center,
-                ),
-              )
-            : GridView.builder(
-                shrinkWrap: true,
-                padding: EdgeInsets.zero,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _paintings.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  childAspectRatio: 1,
-                ),
-                itemBuilder: (_, i) => _buildPaintingItem(_paintings[i]),
-              );
+        if (_paintings.isEmpty) {
+          return _EmptyState(
+            icon: Icons.palette_outlined,
+            title: 'No artworks yet',
+            subtitle: 'Upload your first piece to start your gallery',
+            action: ElevatedButton.icon(
+              onPressed: () => context.push('/upload'),
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('Upload Artwork'),
+            ),
+          );
+        }
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _paintings.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 1,
+          ),
+          itemBuilder: (_, i) => _PaintingTile(painting: _paintings[i]),
+        );
 
       case 'threads':
-        return _threads.isEmpty
-            ? const Padding(
-                padding: EdgeInsets.only(top: 80),
-                child: Text(
-                  "💭 No threads yet",
-                  style: TextStyle(color: Colors.white54, fontSize: 18),
-                  textAlign: TextAlign.center,
-                ),
-              )
-            : Column(
-                children:
-                    _threads.map((t) => _buildThreadCard(t)).toList(),
-              );
+        if (_threads.isEmpty) {
+          return const _EmptyState(
+            icon: Icons.forum_outlined,
+            title: 'No threads yet',
+            subtitle: 'Share your thoughts in the community',
+          );
+        }
+        return Column(
+          children: _threads.map((t) => _ThreadCard(thread: t)).toList(),
+        );
 
       case 'about':
-        return _buildAboutSection();
+        return _AboutSection(
+          profile: _profile,
+          paintings: _paintings.length,
+          followers: _followersCount,
+          following: _followingCount,
+        );
 
       default:
-        return const SizedBox();
+        return const SizedBox.shrink();
     }
   }
+}
 
-  Widget _buildProfileHeader() {
-    return glassContainer(
-      radius: 26,
-      child: Padding(
-        padding: const EdgeInsets.all(26),
-        child: Column(
+// ─── Stat Card ────────────────────────────────────────────────────────────────
+class _StatCard extends StatelessWidget {
+  final String label;
+  final String value;
+  const _StatCard({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceOf(context),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.borderOf(context)),
+      ),
+      child: Column(
+        children: [
+          Text(value,
+              style: TextStyle(
+                color: AppColors.textPrimaryOf(context),
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+              )),
+          const SizedBox(height: 2),
+          Text(label,
+              style: TextStyle(
+                  color: AppColors.textSecondaryOf(context),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Tab Button ───────────────────────────────────────────────────────────────
+class _TabBtn extends StatelessWidget {
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+  const _TabBtn(
+      {required this.label, required this.active, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: active ? AppColors.surfaceOf(context) : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+            boxShadow: active
+                ? [
+                    BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.06),
+                        blurRadius: 4,
+                        offset: const Offset(0, 1))
+                  ]
+                : [],
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: active
+                  ? AppColors.textPrimaryOf(context)
+                  : AppColors.textSecondaryOf(context),
+              fontSize: 13,
+              fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Painting Tile ────────────────────────────────────────────────────────────
+class _PaintingTile extends StatelessWidget {
+  final Map<String, dynamic> painting;
+  const _PaintingTile({required this.painting});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => context.push('/artwork/${painting['id']}'),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.surfaceMutedOf(context),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.borderOf(context)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          fit: StackFit.expand,
           children: [
-            // Avatar
-            CircleAvatar(
-              radius: 48,
-              backgroundColor: Colors.purpleAccent,
-              backgroundImage: _profile?['profile_picture_url'] != null
-                  ? CachedNetworkImageProvider(_profile!['profile_picture_url'] as String)
-                  : null,
-              child: _profile?['profile_picture_url'] == null
-                  ? Text(
-                      (_profile?['display_name'] ??
-                              _profile?['username'] ??
-                              "?")
-                          .toString()[0]
-                          .toUpperCase(),
-                      style: const TextStyle(color: Colors.white, fontSize: 34),
-                    )
-                  : null,
-            ),
-
-            const SizedBox(height: 14),
-
-            // Name
-            Text(
-              _profile?['display_name'] ?? _profile?['username'] ?? "Unknown",
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-
-            const SizedBox(height: 4),
-
-            // Username
-            Text(
-              "@${_profile?['username'] ?? ''}",
-              style: const TextStyle(color: Colors.white54),
-            ),
-
-            // Bio
-            if (_profile?['bio'] != null) ...[
-              const SizedBox(height: 14),
-              Text(
-                _profile!['bio'] as String,
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 15,
+            if (painting['image_url'] != null)
+              CachedNetworkImage(
+                imageUrl: painting['image_url'] as String,
+                fit: BoxFit.cover,
+                placeholder: (_, __) =>
+                    Container(color: AppColors.surfaceMutedOf(context)),
+                errorWidget: (_, __, ___) => Center(
+                  child: Icon(Icons.broken_image_outlined,
+                      color: AppColors.textTertiaryOf(context)),
                 ),
-                textAlign: TextAlign.center,
+              )
+            else
+              Center(
+                child: Icon(Icons.palette_outlined,
+                    color: AppColors.textTertiaryOf(context), size: 32),
               ),
-            ],
 
-            const SizedBox(height: 18),
-
-            // Edit Button
-            ElevatedButton(
-              onPressed: () => context.push('/edit-profile'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.purpleAccent,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 34, vertical: 12),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+            // Price tag
+            if (painting['is_available'] == true &&
+                painting['price_inr'] != null)
+              Positioned(
+                bottom: 8,
+                left: 8,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.success,
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                  child: Text(
+                    '₹${painting['price_inr']}',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700),
+                  ),
+                ),
               ),
-              child: const Text(
-                "Edit Profile",
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
           ],
         ),
       ),
     );
   }
+}
+
+// ─── Thread Card ──────────────────────────────────────────────────────────────
+class _ThreadCard extends StatelessWidget {
+  final Map<String, dynamic> thread;
+  const _ThreadCard({required this.thread});
 
   @override
   Widget build(BuildContext context) {
-    final user = Provider.of<AuthProvider>(context).user;
-
-    if (_loading) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(color: Color(0xFF8b5cf6)),
-        ),
-      );
-    }
-
-    if (_profile == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Profile')),
-        body: const Center(child: Text('Profile not found')),
-      );
-    }
-
-    return Scaffold(
-      backgroundColor: const Color(0xff000000),
-
-      appBar: AppBar(
-        backgroundColor: const Color(0xff000000),
-        elevation: 0,
-        centerTitle: true,
-        title: const Text(
-          "Profile",
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings, color: Colors.purpleAccent),
-            onPressed: () => context.push('/settings'),
-          )
-        ],
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceOf(context),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.borderOf(context)),
       ),
-
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.only(bottom: 100),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            const SizedBox(height: 20),
-
-            // Glass header
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18),
-              child: _buildProfileHeader(),
-            ),
-
-            const SizedBox(height: 22),
-
-            // Tabs
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18),
-              child: Row(
-                children: [
-                  Expanded(child: _buildTabButton('gallery', 'Gallery')),
-                  const SizedBox(width: 8),
-                  Expanded(child: _buildTabButton('threads', 'Threads')),
-                  const SizedBox(width: 8),
-                  Expanded(child: _buildTabButton('about', 'About')),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            // Tab content
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18),
-              child: _buildTabContent(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (thread['title'] != null)
+            Text(thread['title'] as String,
+                style: TextStyle(
+                    color: AppColors.textPrimaryOf(context),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700)),
+          if (thread['content'] != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              thread['content'] as String,
+              style: TextStyle(
+                  color: AppColors.textSecondaryOf(context),
+                  fontSize: 13,
+                  height: 1.5),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+// ─── About Section ────────────────────────────────────────────────────────────
+class _AboutSection extends StatelessWidget {
+  final Map<String, dynamic>? profile;
+  final int paintings;
+  final int followers;
+  final int following;
+  const _AboutSection(
+      {required this.profile,
+      required this.paintings,
+      required this.followers,
+      required this.following});
+
+  @override
+  Widget build(BuildContext context) {
+    final bio = profile?['bio'] as String?;
+    final location = profile?['location'] as String?;
+    final website =
+        (profile?['website'] ?? profile?['website_url']) as String?;
+    final artistType = profile?['artist_type'] as String?;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceOf(context),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.borderOf(context)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('ABOUT',
+              style: TextStyle(
+                  color: AppColors.textTertiaryOf(context),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.2)),
+
+          if (bio != null && bio.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(bio,
+                style: TextStyle(
+                    color: AppColors.textSecondaryOf(context),
+                    fontSize: 14,
+                    height: 1.5)),
+          ] else ...[
+            const SizedBox(height: 12),
+            Text('No bio added yet.',
+                style: TextStyle(
+                    color: AppColors.textTertiaryOf(context), fontSize: 14)),
+          ],
+
+          if (artistType != null) ...[
+            const SizedBox(height: 16),
+            _InfoRow(icon: Icons.brush_outlined, label: artistType),
+          ],
+          if (location != null) ...[
+            const SizedBox(height: 8),
+            _InfoRow(icon: Icons.location_on_outlined, label: location),
+          ],
+          if (website != null) ...[
+            const SizedBox(height: 8),
+            _InfoRow(icon: Icons.link_rounded, label: website),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _InfoRow({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: AppColors.textSecondaryOf(context), size: 16),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(label,
+              style: TextStyle(
+                  color: AppColors.textSecondaryOf(context), fontSize: 13)),
         ),
+      ],
+    );
+  }
+}
+
+// ─── Empty State ──────────────────────────────────────────────────────────────
+class _EmptyState extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Widget? action;
+  const _EmptyState(
+      {required this.icon,
+      required this.title,
+      required this.subtitle,
+      this.action});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 40),
+      child: Column(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: AppColors.surfaceMutedOf(context),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: AppColors.textSecondaryOf(context), size: 28),
+          ),
+          const SizedBox(height: 16),
+          Text(title,
+              style: TextStyle(
+                  color: AppColors.textPrimaryOf(context),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700)),
+          const SizedBox(height: 6),
+          Text(subtitle,
+              style: TextStyle(
+                  color: AppColors.textSecondaryOf(context), fontSize: 13),
+              textAlign: TextAlign.center),
+          if (action != null) ...[const SizedBox(height: 20), action!],
+        ],
       ),
     );
   }

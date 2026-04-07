@@ -1,0 +1,70 @@
+﻿Compiling lib\main.dart for the Web...                          
+flutter : Wasm dry run 
+findings:
+At line:1 char:1
++ flutter build web 
+--no-tree-shake-icons 
+2>&1 | Out-File -FilePath 
+bui ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo        
+      : NotSpecified: (W  
+  asm dry run findings:   
+ :String) [], RemoteEx    
+ception
+    + FullyQualifiedError 
+   Id : NativeCommandErr  
+  or
+ 
+Found incompatibilities 
+with WebAssembly.
+
+package:mobile_scanner/mob
+ile_scanner_web_plugin.dar
+t 2:1 - dart:html 
+unsupported (0)
+package:share_plus/src/sha
+re_plus_web.dart 1:1 - 
+dart:html unsupported (0)
+package:mobile_scanner/src
+/web/base.dart 1:1 - 
+dart:html unsupported (0)
+package:mobile_scanner/src
+/web/base.dart 4:1 - 
+package:js/js.dart 
+unsupported (14)
+package:mobile_scanner/src
+/web/base.dart 5:1 - 
+package:js/js_util.dart 
+unsupported (15)
+package:mobile_scanner/src
+/web/jsqr.dart 5:1 - 
+dart:html unsupported (0)
+package:mobile_scanner/src
+/web/jsqr.dart 8:1 - 
+package:js/js.dart 
+unsupported (14)
+package:mobile_scanner/src
+/web/zxing.dart 2:1 - 
+dart:html unsupported (0)
+package:mobile_scanner/src
+/web/zxing.dart 6:1 - 
+package:js/js.dart 
+unsupported (14)
+package:mobile_scanner/src
+/web/media.dart 7:1 - 
+package:js/js.dart 
+unsupported (14)
+
+Consider addressing these 
+issues to enable wasm 
+builds. See docs for more 
+info: https://docs.flutter
+.dev/platform-integration/
+web/wasm
+
+Use --no-wasm-dry-run to 
+disable these warnings.
+Compiling lib\main.dart for the Web...                             50.4s
+ΓêÜ Built build\web

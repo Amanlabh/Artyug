@@ -1,0 +1,26 @@
+﻿Launching lib\main.dart on Chrome in debug mode...
+Waiting for connection from debug service on Chrome...          
+flutter : Error: SDK root 
+directory not found: /C:/U
+sers/hiii/.puro/envs/stabl
+e/flutter/bin/cache/flutte
+r_web_sdk/.
+At line:1 char:1
++ flutter run -d chrome 
+--web-port 5556 2>&1 | 
+Out-File run_log.txt -En 
+...
++ ~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~
+    + CategoryInfo        
+      : NotSpecified: (E  
+  rror: SDK root...utte   
+ r_web_sdk/.:String) [    
+], RemoteException
+    + FullyQualifiedError 
+   Id : NativeCommandErr  
+  or
+ 
+Waiting for connection from debug service on Chrome...             18.2s
+Failed to compile 
+application.

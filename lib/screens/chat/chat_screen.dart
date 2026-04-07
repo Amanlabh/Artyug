@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../providers/auth_provider.dart';
+import '../../providers/theme_provider.dart';
 
 class ChatScreen extends StatefulWidget {
   final String userId;
@@ -270,6 +271,117 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  void _showMessageHistory() {
+    final user = Provider.of<AuthProvider>(context, listen: false).user;
+    final height = MediaQuery.of(context).size.height * 0.65;
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return SizedBox(
+          height: height,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 8),
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+                child: Row(
+                  children: [
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Message history',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      color: const Color(0xFF6B7280),
+                      onPressed: () => Navigator.of(ctx).pop(),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: _messages.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'No messages yet',
+                          style: TextStyle(color: Color(0xFF6B7280)),
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        itemCount: _messages.length,
+                        itemBuilder: (context, index) {
+                          final m = _messages[index];
+                          final isOwn =
+                              m['sender_id'] == user?.id;
+                          final content =
+                              m['content'] as String? ?? '';
+                          final time = _formatTime(
+                            m['created_at'] as String? ?? '',
+                          );
+                          return ListTile(
+                            leading: CircleAvatar(
+                              radius: 18,
+                              backgroundColor: isOwn
+                                  ? const Color(0xFF8b5cf6)
+                                      .withValues(alpha: 0.15)
+                                  : Colors.grey[200],
+                              child: Icon(
+                                isOwn ? Icons.person : Icons.person_outline,
+                                size: 20,
+                                color: isOwn
+                                    ? const Color(0xFF8b5cf6)
+                                    : Colors.grey[700],
+                              ),
+                            ),
+                            title: Text(
+                              content,
+                              style: const TextStyle(
+                                color: Color(0xFF111827),
+                                fontSize: 15,
+                              ),
+                            ),
+                            subtitle: Text(
+                              '$time · ${isOwn ? 'You' : 'Them'}',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 12,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _confirmDealCompletion() async {
     if (_processingDealAction) return;
 
@@ -439,6 +551,10 @@ class _ChatScreenState extends State<ChatScreen> {
             child: OutlinedButton.icon(
               icon: const Icon(Icons.payment),
               label: const Text('Pay Now'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF111827),
+                side: const BorderSide(color: Color(0xFFD1D5DB)),
+              ),
               onPressed: _showPaymentOptions,
             ),
           ),
@@ -516,6 +632,17 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = context.watch<ThemeProvider>();
+    final inputFill = Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF1E293B)
+        : Colors.grey[100]!;
+    final inputTextColor = Theme.of(context).brightness == Brightness.dark
+        ? Colors.white
+        : const Color(0xFF111827);
+    final hintColor = Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF94A3B8)
+        : const Color(0xFF6B7280);
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -559,6 +686,26 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
         backgroundColor: const Color(0xFF8b5cf6),
         elevation: 0,
+        foregroundColor: Colors.white,
+        iconTheme: const IconThemeData(color: Colors.white),
+        actions: [
+          IconButton(
+            tooltip: themeProvider.isDarkMode ? 'Light mode' : 'Dark mode',
+            icon: Icon(
+              themeProvider.isDarkMode
+                  ? Icons.light_mode_rounded
+                  : Icons.dark_mode_rounded,
+              color: Colors.white,
+            ),
+            onPressed: () =>
+                themeProvider.toggleTheme(!themeProvider.isDarkMode),
+          ),
+          IconButton(
+            tooltip: 'Message history',
+            icon: const Icon(Icons.history_rounded, color: Colors.white),
+            onPressed: _showMessageHistory,
+          ),
+        ],
       ),
       body: _loading
           ? const Center(
@@ -619,14 +766,31 @@ class _ChatScreenState extends State<ChatScreen> {
                         Expanded(
                           child: TextField(
                             controller: _messageController,
+                            style: TextStyle(
+                              color: inputTextColor,
+                              fontSize: 16,
+                            ),
+                            cursorColor: const Color(0xFF8b5cf6),
                             decoration: InputDecoration(
                               hintText: 'Type a message...',
+                              hintStyle: TextStyle(color: hintColor),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(24),
                                 borderSide: BorderSide.none,
                               ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(24),
+                                borderSide: BorderSide.none,
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(24),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFF8b5cf6),
+                                  width: 1.5,
+                                ),
+                              ),
                               filled: true,
-                              fillColor: Colors.grey[100],
+                              fillColor: inputFill,
                               contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 20,
                                 vertical: 10,

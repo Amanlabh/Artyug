@@ -27,7 +27,7 @@ Be concise, helpful, and friendly.
     if (ApiConfig.validateApiKeys()) {
       try {
         _model = GenerativeModel(
-          model: 'gemini-2.0-flash',
+          model: ApiConfig.geminiModel,
           apiKey: ApiConfig.geminiApiKey,
         );
         _isAvailable = true;
@@ -96,17 +96,6 @@ Be concise, helpful, and friendly.
     }
 
     try {
-      final contextPrompt = '''
-User Context:
-- Current section: ${userContext?['currentSection'] ?? 'Home'}
-- User type: ${userContext?['userType'] ?? 'Artist'}
-- Recent activity: ${userContext?['recentActivity'] ?? 'None'}
-
-User Input: "$userInput"
-
-Please provide a helpful response and suggest relevant actions. If the user wants to navigate somewhere, include the navigation action in your response.
-''';
-
       _conversationHistory.add(Content.text(userInput));
 
       if (_model != null) {
@@ -138,9 +127,11 @@ Please provide a helpful response and suggest relevant actions. If the user want
     };
   }
 
+
   Map<String, dynamic>? _extractNavigationIntent(String userInput, String response) {
     final input = userInput.toLowerCase();
-    final responseText = response.toLowerCase();
+    // ignore: unused_local_variable
+    final responseLC = response.toLowerCase(); // reserved for future context routing
 
     if (input.contains('upload') || input.contains('share') || input.contains('post')) {
       return {

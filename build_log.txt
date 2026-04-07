@@ -1,0 +1,248 @@
+﻿Compiling lib\main.dart for the Web...                          
+flutter : Wasm dry run 
+findings:
+At line:1 char:1
++ flutter build web 
+--no-tree-shake-icons 
+2>&1 | Out-File -FilePath 
+bui ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo        
+      : NotSpecified: (W  
+  asm dry run findings:   
+ :String) [], RemoteEx    
+ception
+    + FullyQualifiedError 
+   Id : NativeCommandErr  
+  or
+ 
+Found incompatibilities 
+with WebAssembly.
+
+package:mobile_scanner/mob
+ile_scanner_web_plugin.dar
+t 2:1 - dart:html 
+unsupported (0)
+package:share_plus/src/sha
+re_plus_web.dart 1:1 - 
+dart:html unsupported (0)
+package:mobile_scanner/src
+/web/base.dart 1:1 - 
+dart:html unsupported (0)
+package:mobile_scanner/src
+/web/base.dart 4:1 - 
+package:js/js.dart 
+unsupported (14)
+package:mobile_scanner/src
+/web/base.dart 5:1 - 
+package:js/js_util.dart 
+unsupported (15)
+package:mobile_scanner/src
+/web/jsqr.dart 5:1 - 
+dart:html unsupported (0)
+package:mobile_scanner/src
+/web/jsqr.dart 8:1 - 
+package:js/js.dart 
+unsupported (14)
+package:mobile_scanner/src
+/web/zxing.dart 2:1 - 
+dart:html unsupported (0)
+package:mobile_scanner/src
+/web/zxing.dart 6:1 - 
+package:js/js.dart 
+unsupported (14)
+package:mobile_scanner/src
+/web/media.dart 7:1 - 
+package:js/js.dart 
+unsupported (14)
+
+Consider addressing these 
+issues to enable wasm 
+builds. See docs for more 
+info: https://docs.flutter
+.dev/platform-integration/
+web/wasm
+
+Use --no-wasm-dry-run to 
+disable these warnings.
+Target dart2js failed: 
+ProcessException: Process 
+exited abnormally with 
+exit code 1:
+lib/features/communities/c
+ommunity_feed_screen.dart:
+414:29:
+Error: No named parameter 
+with the name 
+'errorBuilder'.
+                          
+  errorBuilder: (_, __, 
+___) =>
+                          
+  ^^^^^^^^^^^^
+/C:/Users/hiii/.puro/share
+d/pub_cache/hosted/pub.dev
+/cached_network_image-3.4.
+1/lib/src/cached_image_wid
+get.dart:212:3:
+Info: Found this 
+candidate, but the 
+arguments don't match.
+  CachedNetworkImage({
+  ^^^^^^^^^^^^^^^^^^
+Error: Compilation failed.
+  Command: C:\Users\hiii\.
+puro\envs\stable\flutter\b
+in\cache\dart-sdk\bin\dart
+.exe compile js --platform
+-binaries=C:\Users\hiii\.p
+uro\envs\stable\flutter\bi
+n\cache\flutter_web_sdk\ke
+rnel 
+--invoker=flutter_tool 
+-Ddart.vm.product=true 
+-DFLUTTER_VERSION=3.41.6 
+-DFLUTTER_CHANNEL=stable -
+DFLUTTER_GIT_URL=https://g
+ithub.com/flutter/flutter.
+git -DFLUTTER_FRAMEWORK_RE
+VISION=db50e20168 -DFLUTTE
+R_ENGINE_REVISION=425cfb54
+d0 -DFLUTTER_DART_VERSION=
+3.11.4 -DFLUTTER_WEB_USE_S
+KIA=true -DFLUTTER_WEB_USE
+_SKWASM=false -DFLUTTER_WE
+B_CANVASKIT_URL=https://ww
+w.gstatic.com/flutter-canv
+askit/425cfb54d01a9472b3e8
+1d9e76fd63a4a44cfbcb/ 
+--native-null-assertions 
+--no-source-maps -O4 
+--minify -o E:\artyug\Arty
+ug-main\.dart_tool\flutter
+_build\38148b64b2117d7c3fc
+fb89b1391040e\app.dill --p
+ackages=E:\artyug\Artyug-m
+ain\.dart_tool\package_con
+fig.json --cfe-only E:\art
+yug\Artyug-main\.dart_tool
+\flutter_build\38148b64b21
+17d7c3fcfb89b1391040e\main
+.dart
+#0      
+RunResult.throwException (
+package:flutter_tools/src/
+base/process.dart:153:5)
+#1      
+_DefaultProcessUtils.run (
+package:flutter_tools/src/
+base/process.dart:379:19)
+<asynchronous suspension>
+#2      
+Dart2JSTarget.build (packa
+ge:flutter_tools/src/build
+_system/targets/web.dart:2
+08:5)
+<asynchronous suspension>
+#3      _BuildInstance._in
+vokeInternal (package:flut
+ter_tools/src/build_system
+/build_system.dart:937:9)
+<asynchronous suspension>
+#4      
+Future.wait.<anonymous 
+closure> (dart:async/futur
+e.dart:546:21)
+<asynchronous suspension>
+#5      _BuildInstance.inv
+okeTarget (package:flutter
+_tools/src/build_system/bu
+ild_system.dart:875:32)
+<asynchronous suspension>
+#6      
+Future.wait.<anonymous 
+closure> (dart:async/futur
+e.dart:546:21)
+<asynchronous suspension>
+#7      _BuildInstance.inv
+okeTarget (package:flutter
+_tools/src/build_system/bu
+ild_system.dart:875:32)
+<asynchronous suspension>
+#8      
+FlutterBuildSystem.build (
+package:flutter_tools/src/
+build_system/build_system.
+dart:684:16)
+<asynchronous suspension>
+#9      
+WebBuilder.buildWeb (packa
+ge:flutter_tools/src/web/c
+ompile.dart:107:34)
+<asynchronous suspension>
+#10     BuildWebCommand.ru
+nCommand (package:flutter_
+tools/src/commands/build_w
+eb.dart:300:5)
+<asynchronous suspension>
+#11     FlutterCommand.run
+.<anonymous closure> (pack
+age:flutter_tools/src/runn
+er/flutter_command.dart:15
+90:27)
+<asynchronous suspension>
+#12     
+AppContext.run.<anonymous 
+closure> (package:flutter_
+tools/src/base/context.dar
+t:154:19)
+<asynchronous suspension>
+#13     
+CommandRunner.runCommand (
+package:args/command_runne
+r.dart:212:13)
+<asynchronous suspension>
+#14     FlutterCommandRunn
+er.runCommand.<anonymous 
+closure> (package:flutter_
+tools/src/runner/flutter_c
+ommand_runner.dart:496:9)
+<asynchronous suspension>
+#15     
+AppContext.run.<anonymous 
+closure> (package:flutter_
+tools/src/base/context.dar
+t:154:19)
+<asynchronous suspension>
+#16     FlutterCommandRunn
+er.runCommand (package:flu
+tter_tools/src/runner/flut
+ter_command_runner.dart:43
+1:5)
+<asynchronous suspension>
+#17     FlutterCommandRunn
+er.run.<anonymous 
+closure> (package:flutter_
+tools/src/runner/flutter_c
+ommand_runner.dart:307:33)
+<asynchronous suspension>
+#18     run.<anonymous 
+closure>.<anonymous 
+closure> (package:flutter_
+tools/runner.dart:104:11)
+<asynchronous suspension>
+#19     
+AppContext.run.<anonymous 
+closure> (package:flutter_
+tools/src/base/context.dar
+t:154:19)
+<asynchronous suspension>
+#20     main (package:flut
+ter_tools/executable.dart:
+103:3)
+<asynchronous suspension>
+
+Compiling lib\main.dart for the Web...                             44.9s
+Error: Failed to compile 
+application for the Web.

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
+import '../../core/config/canonical_guilds.dart';
 import '../../providers/auth_provider.dart';
 
 class MessagesScreen extends StatefulWidget {
@@ -17,14 +18,28 @@ class MessagesScreen extends StatefulWidget {
 class _MessagesScreenState extends State<MessagesScreen> {
   final SupabaseClient _supabase = Supabase.instance.client;
   List<Map<String, dynamic>> _conversations = [];
+  List<Map<String, dynamic>> _officialGuilds = [];
   bool _loading = true;
   RealtimeChannel? _subscription;
 
   @override
   void initState() {
     super.initState();
-    _fetchConversations();
+    _refreshAll();
     _setupRealtimeSubscription();
+  }
+
+  Future<void> _refreshAll() async {
+    await Future.wait([_fetchOfficialGuilds(), _fetchConversations()]);
+  }
+
+  Future<void> _fetchOfficialGuilds() async {
+    try {
+      final list = await CanonicalGuilds.fetchOfficialCommunities(_supabase);
+      if (mounted) setState(() => _officialGuilds = list);
+    } catch (_) {
+      if (mounted) setState(() => _officialGuilds = []);
+    }
   }
 
   @override
@@ -174,33 +189,10 @@ class _MessagesScreenState extends State<MessagesScreen> {
           ),
           callback: (payload) {
             // Refresh conversations when conversations are updated
-            _fetchConversations();
+            _refreshAll();
           },
         )
         .subscribe();
-  }
-
-  String _formatDate(String? dateStr) {
-    if (dateStr == null) return '';
-    try {
-      final date = DateTime.parse(dateStr);
-      final now = DateTime.now();
-      final difference = now.difference(date);
-
-      if (difference.inDays == 0) {
-        if (difference.inHours == 0) {
-          if (difference.inMinutes == 0) return 'Just now';
-          return '${difference.inMinutes}m ago';
-        }
-        return '${difference.inHours}h ago';
-      }
-      if (difference.inDays == 1) return 'Yesterday';
-      if (difference.inDays < 7) return '${difference.inDays}d ago';
-
-      return '${date.day}/${date.month}/${date.year}';
-    } catch (_) {
-      return '';
-    }
   }
 
   String _formatTime(String? dateStr) {
@@ -244,6 +236,68 @@ class _MessagesScreenState extends State<MessagesScreen> {
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
           child: Padding(padding: padding, child: child),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGuildChannelCard(Map<String, dynamic> community) {
+    final name = community['name'] as String? ?? 'Guild';
+    final id = community['id'] as String;
+    final n = Uri.encodeComponent(name);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: _glassContainer(
+        padding: const EdgeInsets.all(14),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => context.push('/community-chat/$id?name=$n'),
+            borderRadius: BorderRadius.circular(18),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 24,
+                  backgroundColor: Colors.deepPurpleAccent,
+                  child: Text(
+                    name.isNotEmpty ? name[0].toUpperCase() : 'G',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '$name — main',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Guild chat · history for all members',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.6),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right, color: Colors.white54),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -449,7 +503,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
             const Center(
               child: CircularProgressIndicator(color: Colors.purpleAccent),
             )
-          else if (_conversations.isEmpty)
+          else if (_conversations.isEmpty && _officialGuilds.isEmpty)
             Center(
               child: _glassContainer(
                 child: Column(
@@ -484,17 +538,79 @@ class _MessagesScreenState extends State<MessagesScreen> {
             )
           else
             RefreshIndicator(
-              onRefresh: _fetchConversations,
+              onRefresh: _refreshAll,
               color: Colors.purpleAccent,
-              child: ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: _conversations.length,
-                itemBuilder: (context, index) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _buildConversationCard(_conversations[index]),
-                  );
-                },
+              child: CustomScrollView(
+                slivers: [
+                  if (_officialGuilds.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Guild channels',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Main chat for each official guild (same as Artyug-main).',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.55),
+                                fontSize: 12,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            ..._officialGuilds.map(_buildGuildChannelCard),
+                          ],
+                        ),
+                      ),
+                    ),
+                  if (_conversations.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                        child: Text(
+                          'Direct messages',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.9),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _buildConversationCard(_conversations[index]),
+                          );
+                        },
+                        childCount: _conversations.length,
+                      ),
+                    ),
+                  ),
+                  if (_conversations.isEmpty && _officialGuilds.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          'No direct messages yet — open a profile to start a private chat.',
+                          style: TextStyle(color: Colors.white.withOpacity(0.5)),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
         ],

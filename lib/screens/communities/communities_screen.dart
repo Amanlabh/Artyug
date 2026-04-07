@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
+import '../../core/config/canonical_guilds.dart';
 import '../../providers/auth_provider.dart';
 import '../../components/clickable_name.dart';
 
@@ -103,8 +104,13 @@ class _CommunitiesScreenState extends State<CommunitiesScreen> {
         }),
       );
 
+      final official = CanonicalGuilds.filterAndSort(
+        communitiesWithStats,
+        (c) => c['name'] as String?,
+      );
+
       setState(() {
-        _communities = communitiesWithStats;
+        _communities = official;
         _loading = false;
       });
     } catch (e) {
@@ -725,13 +731,7 @@ class _CommunitiesScreenState extends State<CommunitiesScreen> {
         icon: const Icon(Icons.arrow_back, color: Colors.white),
         onPressed: () => context.pop(),
       ),
-      actions: [
-        IconButton(
-          onPressed: () => context.push('/create-community'),
-          icon: const Icon(Icons.add, color: Colors.white),
-          tooltip: 'Create Community',
-        ),
-      ],
+      actions: const [],
     );
   }
 

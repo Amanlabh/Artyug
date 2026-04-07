@@ -24,6 +24,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
   bool _loading = true;
   bool _postsLoading = false;
   bool _isMember = false;
+  bool _isCreator = false;
   int _memberCount = 0;
 
   @override
@@ -85,6 +86,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
           .maybeSingle();
 
       final isMember = membershipResponse != null;
+      final isCreator = communityResponse['creator_id'] == user.id;
 
       setState(() {
         _community = {
@@ -93,6 +95,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
         };
         _memberCount = memberCount;
         _isMember = isMember;
+        _isCreator = isCreator;
         _loading = false;
       });
     } catch (e) {
@@ -511,6 +514,30 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
                     isDanger: _isMember,
                   ),
                 ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: const BorderSide(color: Colors.purpleAccent),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    onPressed: () {
+                      final n = Uri.encodeComponent(
+                        (_community!['name'] as String?) ?? 'Guild',
+                      );
+                      context.push(
+                        '/community-chat/${widget.communityId}?name=$n',
+                      );
+                    },
+                    icon: const Icon(Icons.chat_bubble_outline),
+                    label: const Text(
+                      'Open guild chat (main)',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -755,6 +782,22 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
           ),
         ),
         centerTitle: true,
+        actions: [
+          if (_isCreator)
+            IconButton(
+              tooltip: 'Edit community',
+              icon: const Icon(Icons.edit_outlined, color: Colors.white),
+              onPressed: () async {
+                final refreshed = await context.push<bool>(
+                  '/edit-community/${widget.communityId}',
+                );
+                if (refreshed == true && mounted) {
+                  _fetchCommunityData();
+                  _fetchPosts();
+                }
+              },
+            ),
+        ],
       ),
       body: Stack(
         children: [
