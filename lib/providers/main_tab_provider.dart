@@ -7,7 +7,7 @@ class MainTabProvider extends ChangeNotifier {
   int get index => _index;
 
   void setIndex(int i) {
-    if (i < 0 || i > 2) return;
+    if (i < 0 || i > 3) return;
     if (_index == i) return;
     _index = i;
     notifyListeners();

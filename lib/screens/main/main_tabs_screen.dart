@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/theme/app_colors.dart';
+import '../../features/dashboard/collector/collector_dashboard_screen.dart';
+import '../../features/dashboard/creator/creator_dashboard_screen.dart';
 import '../../features/feed/feed_screen.dart';
 import '../../providers/app_mode_provider.dart';
 import '../../providers/auth_provider.dart';
@@ -11,12 +13,15 @@ import '../../providers/main_tab_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../widgets/onboarding_guide.dart';
 import '../../widgets/artyug_search_bar.dart';
+import '../../widgets/profile_sheet.dart';
 import '../explore/explore_screen.dart';
 import '../profile/profile_screen.dart';
 
 const _primaryNavItems = [
   _NavItem(icon: Icons.home_rounded, label: 'Home', tabIndex: 0),
   _NavItem(icon: Icons.explore_rounded, label: 'Explore', tabIndex: 1),
+  _NavItem(
+      icon: Icons.dashboard_customize_rounded, label: 'Dashboard', tabIndex: 3),
   _NavItem(icon: Icons.receipt_long_rounded, label: 'Orders', route: '/orders'),
   _NavItem(icon: Icons.person_rounded, label: 'Profile', tabIndex: 2),
 ];
@@ -26,6 +31,14 @@ const _studioNavItems = [
       icon: Icons.add_photo_alternate_rounded,
       label: 'Upload Artwork',
       route: '/upload'),
+  _NavItem(
+      icon: Icons.store_rounded,
+      label: 'Shop',
+      route: '/shop'),
+  _NavItem(
+      icon: Icons.gavel_rounded,
+      label: 'Auctions',
+      route: '/auctions'),
   _NavItem(
       icon: Icons.workspace_premium_rounded,
       label: 'Certificates',
@@ -72,8 +85,17 @@ class _NavItem {
   });
 }
 
+enum _DashboardView { creator, collector }
+
 class MainTabsScreen extends StatefulWidget {
-  const MainTabsScreen({super.key});
+  final int? initialTabIndex;
+  final String? initialDashboard;
+
+  const MainTabsScreen({
+    super.key,
+    this.initialTabIndex,
+    this.initialDashboard,
+  });
 
   @override
   State<MainTabsScreen> createState() => _MainTabsScreenState();
@@ -81,19 +103,51 @@ class MainTabsScreen extends StatefulWidget {
 
 class _MainTabsScreenState extends State<MainTabsScreen> {
   final GlobalKey<ScaffoldState> _mobileShellKey = GlobalKey<ScaffoldState>();
+  _DashboardView _dashboardView = _DashboardView.creator;
 
-  late final List<Widget> _screens = [
-    const FeedScreen(useShellTopBar: true),
-    const ExploreScreen(embedInShell: true),
-    const ProfileScreen(),
-  ];
+  List<Widget> get _screens => [
+        const FeedScreen(useShellTopBar: true),
+        const ExploreScreen(embedInShell: true),
+        const ProfileScreen(),
+        _dashboardShell(),
+      ];
 
   @override
   void initState() {
     super.initState();
+    _applyRoutePreset();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _setInitialTabIfProvided();
       OnboardingGuide.showIfNeeded(context);
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant MainTabsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialDashboard != widget.initialDashboard) {
+      _applyRoutePreset();
+    }
+    if (oldWidget.initialTabIndex != widget.initialTabIndex) {
+      _setInitialTabIfProvided();
+    }
+  }
+
+  void _applyRoutePreset() {
+    final raw = widget.initialDashboard?.trim().toLowerCase();
+    if (raw == 'collector') {
+      _dashboardView = _DashboardView.collector;
+      return;
+    }
+    if (raw == 'creator') {
+      _dashboardView = _DashboardView.creator;
+    }
+  }
+
+  void _setInitialTabIfProvided() {
+    final i = widget.initialTabIndex;
+    if (i == null || !mounted) return;
+    context.read<MainTabProvider>().setIndex(i);
   }
 
   void _openNavItem(_NavItem item) {
@@ -102,6 +156,16 @@ class _MainTabsScreenState extends State<MainTabsScreen> {
       return;
     }
     if (item.route != null) {
+      if (item.route == '/creator-dashboard') {
+        setState(() => _dashboardView = _DashboardView.creator);
+        context.go('/main?tab=3&dashboard=creator');
+        return;
+      }
+      if (item.route == '/collector-dashboard') {
+        setState(() => _dashboardView = _DashboardView.collector);
+        context.go('/main?tab=3&dashboard=collector');
+        return;
+      }
       context.push(item.route!);
     }
   }
@@ -228,10 +292,12 @@ class _MainTabsScreenState extends State<MainTabsScreen> {
               margin: const EdgeInsets.symmetric(vertical: 10),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: (modeProvider.isDemoMode ? AppColors.warning : AppColors.success).withOpacity(0.15),
+                color: (modeProvider.isDemoMode ? AppColors.warning : AppColors.success)
+                    .withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(999),
                 border: Border.all(
-                  color: (modeProvider.isDemoMode ? AppColors.warning : AppColors.success).withOpacity(0.5),
+                  color: (modeProvider.isDemoMode ? AppColors.warning : AppColors.success)
+                      .withValues(alpha: 0.5),
                 ),
               ),
               child: Row(
@@ -267,7 +333,11 @@ class _MainTabsScreenState extends State<MainTabsScreen> {
             ),
             onPressed: () => themeProvider.toggleTheme(!themeProvider.isDarkMode),
           ),
-          const SizedBox(width: 4),
+          // Profile avatar → opens profile sheet
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: const ProfileAvatarButton(radius: 17),
+          ),
         ],
       ),
       body: IndexedStack(index: currentIndex, children: _screens),
@@ -282,6 +352,8 @@ class _MainTabsScreenState extends State<MainTabsScreen> {
           NavigationDestination(
               icon: Icon(Icons.explore_rounded), label: 'Explore'),
           NavigationDestination(
+              icon: Icon(Icons.dashboard_customize_rounded), label: 'Dashboard'),
+          NavigationDestination(
               icon: Icon(Icons.person_rounded), label: 'Profile'),
         ],
       ),
@@ -294,6 +366,69 @@ class _MainTabsScreenState extends State<MainTabsScreen> {
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endContained,
+    );
+  }
+
+  Widget _dashboardShell() {
+    final selected = <_DashboardView>{_dashboardView};
+    return Container(
+      color: AppColors.background,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                const Text(
+                  'Dashboard',
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                SegmentedButton<_DashboardView>(
+                  segments: const [
+                    ButtonSegment<_DashboardView>(
+                      value: _DashboardView.creator,
+                      icon: Icon(Icons.palette_outlined),
+                      label: Text('Creator'),
+                    ),
+                    ButtonSegment<_DashboardView>(
+                      value: _DashboardView.collector,
+                      icon: Icon(Icons.collections_bookmark_outlined),
+                      label: Text('Collector'),
+                    ),
+                  ],
+                  selected: selected,
+                  onSelectionChanged: (selection) {
+                    if (selection.isEmpty) return;
+                    final next = selection.first;
+                    setState(() => _dashboardView = next);
+                  },
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: AppColors.border),
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              child: _dashboardView == _DashboardView.creator
+                  ? const CreatorDashboardScreen(
+                      key: ValueKey<String>('creator-dashboard'),
+                    )
+                  : const CollectorDashboardScreen(
+                      key: ValueKey<String>('collector-dashboard'),
+                    ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -673,28 +808,8 @@ class _ShellTopBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          InkWell(
-            onTap: () => context.push('/profile'),
-            borderRadius: BorderRadius.circular(999),
-            child: CircleAvatar(
-              radius: 18,
-              backgroundColor: AppColors.primary.withValues(alpha: 0.22),
-              backgroundImage: authProvider.user?.userMetadata?['avatar_url'] !=
-                      null
-                  ? NetworkImage(authProvider.user!.userMetadata!['avatar_url'])
-                  : null,
-              child: authProvider.user?.userMetadata?['avatar_url'] == null
-                  ? Text(
-                      (authProvider.user?.email ?? 'A')
-                          .substring(0, 1)
-                          .toUpperCase(),
-                      style: const TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w800),
-                    )
-                  : null,
-            ),
-          ),
+          // Profile avatar → opens Zoom-style profile sheet
+          const ProfileAvatarButton(radius: 18),
         ],
       ),
     );

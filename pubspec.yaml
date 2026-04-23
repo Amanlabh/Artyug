@@ -1,7 +1,7 @@
 name: mobilapp_artyug
 description: ArtYug - A creative platform for artists, creators, and art lovers
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.1.0+2100
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -29,6 +29,7 @@ dependencies:
   # ─── Backend ─────────────────────────────────────────────────────────────
   supabase_flutter: ^2.0.0
   gotrue: ^2.16.0 # AuthException / user-friendly auth error messages
+  google_sign_in: ^6.2.1
   
   # ─── Image Handling ──────────────────────────────────────────────────────
   image_picker: ^1.0.5

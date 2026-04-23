@@ -236,6 +236,12 @@ class _StudioHeader extends StatelessWidget {
                   const Spacer(),
                   Row(
                     children: [
+                      IconButton(
+                        tooltip: 'Home',
+                        icon: const Icon(Icons.home_rounded,
+                            color: AppColors.textSecondary),
+                        onPressed: () => context.go('/main'),
+                      ),
                       Container(
                         width: 8,
                         height: 8,

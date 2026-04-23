@@ -287,9 +287,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       }
       if (mounted) {
         // Post-onboarding landing.
-        // - Creators: jump into studio dashboard
-        // - Collectors: land on homepage (market feed), not dashboard
-        final dashboard = _role == 'creator' ? '/creator-dashboard' : '/main';
+        // Always route into the main shell so users get the normal app nav.
+        const dashboard = '/main';
         context.go(
           '/terms-acceptance?next=${Uri.encodeComponent(dashboard)}',
         );

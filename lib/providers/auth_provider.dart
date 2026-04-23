@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -106,10 +107,13 @@ class AuthProvider with ChangeNotifier {
 
       final prefs = await SharedPreferences.getInstance();
       final lastActiveMs = prefs.getInt(_kLastActiveKey);
-      // If we have never recorded activity (e.g. first time with new session
-      // tracking, or user cleared storage), treat the existing Supabase
-      // browser session as expired and force a fresh login.
-      if (lastActiveMs == null) return true;
+      // If activity was never recorded (first OAuth callback, new device,
+      // or cleared local storage), do NOT kill the valid Supabase session.
+      // Seed activity now and continue.
+      if (lastActiveMs == null) {
+        await _touchLastActive();
+        return false;
+      }
       final lastActive = DateTime.fromMillisecondsSinceEpoch(lastActiveMs);
       final diff = DateTime.now().difference(lastActive);
       return diff > _kSessionTimeoutDuration;
@@ -289,6 +293,42 @@ class AuthProvider with ChangeNotifier {
   }
 
   Future<bool> signInWithGoogle() async {
+    // Mobile: prefer native Google account chooser inside the app.
+    if (!kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS)) {
+      try {
+        final webClientId = AppConfig.googleWebClientId?.trim();
+        final signIn = GoogleSignIn(
+          scopes: const ['email', 'profile'],
+          serverClientId:
+              (webClientId != null && webClientId.isNotEmpty) ? webClientId : null,
+        );
+
+        final account = await signIn.signIn();
+        if (account == null) {
+          return false; // User cancelled account picker.
+        }
+
+        final auth = await account.authentication;
+        final idToken = auth.idToken;
+        if (idToken != null && idToken.isNotEmpty) {
+          await _supabase.auth.signInWithIdToken(
+            provider: OAuthProvider.google,
+            idToken: idToken,
+            accessToken: auth.accessToken,
+          );
+          return true;
+        }
+        debugPrint(
+          '[Auth] Google native sign-in returned no idToken. Falling back to OAuth redirect.',
+        );
+      } catch (e) {
+        debugPrint('[Auth] Native Google sign-in failed: $e');
+      }
+    }
+
+    // Web/desktop or fallback path.
     return _supabase.auth.signInWithOAuth(
       OAuthProvider.google,
       redirectTo: _oauthRedirectTo,

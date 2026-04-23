@@ -3,12 +3,20 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth_error_messages.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/auth_background.dart';
 
-const _bg = Color(0xFFFAF9F7);
-const _orange = Color(0xFFE8470A); // exact landing-page orange
-const _black = Color(0xFF0A0A0A); // exact landing-page near-black
+// Dark-mode sign-up constants (matches sign-in aesthetic)
+const _bg = Color(0xFF060508);          // deep dark bg
+const _cardBg = Color(0xFF101216);      // glass card bg
+const _cardBorder = Color(0xFF1C1F26); // card border
+const _orange = Color(0xFFE8470A);
+const _primaryText = Color(0xFFE9EAF0);
+const _mutedText = Color(0xFF9DA3B2);
+const _fieldBorder = Color(0xFF2B3040);
+const _fieldFill = Color(0xFF141820);
+const _black = Color(0xFF0A0A0A); // kept for compat
 const _grey = Color(0xFF6B7280);
-const _border = Color(0xFFE5E7EB);
+const _border = Color(0xFF2B3040);
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -124,7 +132,14 @@ class _SignUpScreenState extends State<SignUpScreen>
       backgroundColor: _bg,
       body: FadeTransition(
         opacity: _fadeAnim,
-        child: wide ? _wideLayout() : _narrowLayout(),
+        child: Stack(
+          children: [
+            // CRED-style animated orb background
+            const Positioned.fill(child: AuthBackground()),
+            // Content
+            if (wide) _wideLayout() else _narrowLayout(),
+          ],
+        ),
       ),
     );
   }
@@ -132,102 +147,60 @@ class _SignUpScreenState extends State<SignUpScreen>
   Widget _wideLayout() {
     return Row(
       children: [
-        // Left brand panel
+        // Left brand panel — dark glass over orbs
         Expanded(
           child: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF0F0F0F), Color(0xFF1C1C1C)],
-              ),
-            ),
-            child: Stack(
-              children: [
-                Positioned(
-                  top: -60,
-                  right: -40,
-                  child: Container(
-                    width: 260,
-                    height: 260,
+            color: Colors.black.withValues(alpha: 0.35),
+            child: Padding(
+              padding: const EdgeInsets.all(48),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _logo(light: true),
+                  const Spacer(),
+                  _featureBullet(Icons.verified_outlined, 'Blockchain-backed certificates'),
+                  const SizedBox(height: 20),
+                  _featureBullet(Icons.gavel_rounded, 'Run live auctions'),
+                  const SizedBox(height: 20),
+                  _featureBullet(Icons.groups_outlined, 'Build your artist guild'),
+                  const SizedBox(height: 20),
+                  _featureBullet(Icons.store_outlined, 'Sell globally — keep 95%'),
+                  const SizedBox(height: 48),
+                  Container(
+                    padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: _orange.withOpacity(0.07),
+                      color: Colors.white.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
                     ),
-                  ),
-                ),
-                Positioned(
-                  bottom: -60,
-                  left: -40,
-                  child: Container(
-                    width: 300,
-                    height: 300,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: _orange.withOpacity(0.05),
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(48),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _logo(light: true),
-                      const Spacer(),
-                      // Feature bullets
-                      _featureBullet(Icons.verified_outlined,
-                          'Blockchain-backed certificates'),
-                      const SizedBox(height: 20),
-                      _featureBullet(Icons.gavel_rounded, 'Run live auctions'),
-                      const SizedBox(height: 20),
-                      _featureBullet(Icons.groups_outlined,
-                          'Build your artist guild'),
-                      const SizedBox(height: 20),
-                      _featureBullet(Icons.store_outlined,
-                          'Sell globally — keep 95%'),
-                      const SizedBox(height: 48),
-                      // Social proof
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.04),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                              color: Colors.white.withOpacity(0.08)),
-                        ),
-                        child: const Row(
-                          children: [
-                            Icon(Icons.format_quote,
-                                color: _orange, size: 18),
-                            SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'Sold 3 paintings in my first week.',
-                                style: TextStyle(
-                                  fontFamily: 'Outfit',
-                                  color: Colors.white70,
-                                  fontSize: 13,
-                                  fontStyle: FontStyle.italic,
-                                ),
-                              ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.format_quote, color: _orange, size: 18),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Sold 3 paintings in my first week.',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
+                              fontStyle: FontStyle.italic,
                             ),
-                          ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 48),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 48),
+                ],
+              ),
             ),
           ),
         ),
-        // Right form panel
+        // Right form panel — dark glass card
         SizedBox(
           width: 480,
           child: Container(
-            color: _bg,
+            color: _cardBg.withValues(alpha: 0.90),
             child: SafeArea(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 44, vertical: 48),
@@ -259,16 +232,35 @@ class _SignUpScreenState extends State<SignUpScreen>
 
   Widget _narrowLayout() {
     return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 28),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 48),
-            Center(child: _logo(light: false)),
-            const SizedBox(height: 40),
-            _formContent(),
-          ],
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 380),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(24, 28, 24, 28),
+              decoration: BoxDecoration(
+                color: _cardBg.withValues(alpha: 0.92),
+                borderRadius: BorderRadius.circular(26),
+                border: Border.all(color: _cardBorder),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.black54,
+                    blurRadius: 30,
+                    offset: Offset(0, 18),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(child: _logo(light: true)),
+                  const SizedBox(height: 28),
+                  _formContent(),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -308,23 +300,22 @@ class _SignUpScreenState extends State<SignUpScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
+          Text(
             'Create your\nart world.',
             style: TextStyle(
-              fontFamily: 'Outfit',
-              fontSize: 36,
+              fontSize: 32,
               fontWeight: FontWeight.w800,
-              color: _black,
+              color: _primaryText,
               height: 1.1,
               letterSpacing: -1,
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
-            'Join 10 artists and 30 users already on the platform.',
-            style: TextStyle(fontFamily: 'Outfit', fontSize: 14, color: _grey),
+          Text(
+            'Join artists already on the platform.',
+            style: TextStyle(fontSize: 14, color: _mutedText),
           ),
-          const SizedBox(height: 36),
+          const SizedBox(height: 32),
 
           // Email
           _field(
@@ -516,32 +507,31 @@ class _SignUpScreenState extends State<SignUpScreen>
       textInputAction: action,
       obscureText: obscure,
       onFieldSubmitted: onSubmit,
-      style: const TextStyle(fontFamily: 'Outfit', color: _black, fontSize: 15),
+      style: TextStyle(color: _primaryText, fontSize: 15),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(fontFamily: 'Outfit', color: _grey, fontSize: 14),
+        labelStyle: TextStyle(color: _mutedText, fontSize: 14),
         filled: true,
-        fillColor: Colors.white,
-        prefixIcon: Icon(icon, size: 20, color: _grey),
+        fillColor: _fieldFill,
+        prefixIcon: Icon(icon, size: 20, color: _mutedText),
         suffixIcon: suffix,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: _border),
+          borderSide: BorderSide(color: _fieldBorder),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: _border),
+          borderSide: BorderSide(color: _fieldBorder),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: _orange, width: 1.5),
+          borderSide: BorderSide(color: _orange, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: const BorderSide(color: Colors.red),
         ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       ),
       validator: validator,
     );

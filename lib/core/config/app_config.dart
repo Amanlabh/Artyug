@@ -13,6 +13,10 @@ class AppConfig {
   /// Otherwise web uses [Uri.base.origin] and mobile uses `artyug://login-callback`.
   static String? get oauthRedirectUrl => dotenv.env['OAUTH_REDIRECT_URL'];
 
+  /// Google OAuth Web client ID used by native Google Sign-In to mint ID tokens
+  /// that can be exchanged with Supabase.
+  static String? get googleWebClientId => dotenv.env['GOOGLE_WEB_CLIENT_ID'];
+
   // ─── App & Chain Mode ────────────────────────────────────────────────────
   static AppMode get appMode =>
       dotenv.env['ARTYUG_APP_MODE']?.toLowerCase() == 'live'
