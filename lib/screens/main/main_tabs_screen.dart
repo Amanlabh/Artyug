@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -341,31 +341,11 @@ class _MainTabsScreenState extends State<MainTabsScreen> {
         ],
       ),
       body: IndexedStack(index: currentIndex, children: _screens),
-      bottomNavigationBar: NavigationBar(
-        backgroundColor: cs.surface,
-        indicatorColor: AppColors.primary.withValues(alpha: 0.2),
-        selectedIndex: currentIndex,
-        onDestinationSelected: (index) =>
-            context.read<MainTabProvider>().setIndex(index),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.home_rounded), label: 'Home'),
-          NavigationDestination(
-              icon: Icon(Icons.explore_rounded), label: 'Explore'),
-          NavigationDestination(
-              icon: Icon(Icons.dashboard_customize_rounded), label: 'Dashboard'),
-          NavigationDestination(
-              icon: Icon(Icons.person_rounded), label: 'Profile'),
-        ],
+      bottomNavigationBar: _BottomNavWithUpload(
+        currentIndex: currentIndex,
+        onTap: (i) => context.read<MainTabProvider>().setIndex(i),
+        onUpload: () => context.push('/upload'),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push('/upload'),
-        backgroundColor: AppColors.primary,
-        icon:
-            const Icon(Icons.add_photo_alternate_rounded, color: Colors.white),
-        label: const Text('Upload',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endContained,
     );
   }
 
