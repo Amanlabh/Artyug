@@ -53,6 +53,7 @@ import '../features/shop/shop_screen.dart';
 import '../features/auction/auction_list_screen.dart';
 import '../features/auction/auction_detail_screen.dart';
 import '../features/auction/auction_model.dart';
+import '../features/gallery/create_gallery_screen.dart';
 
 class AppRouter {
   /// [auth] must be the same [AuthProvider] instance registered in [Provider];
@@ -71,36 +72,39 @@ class AppRouter {
             loc == '/nfc-scan' ||
             loc == '/onboarding';
 
-        if (!authProvider.loading) {
-          if (!isAuthenticated && !isAuthRoute && !isPublicRoute) {
-            return '/sign-in';
-          }
+        // ── While auth is still resolving, don't let the user see
+        //    the sign-in page flash.  Keep them on whatever route
+        //    GoRouter placed them (the builder shows a loading screen).
+        if (authProvider.loading) return null;
 
-          // Logged in but onboarding not finished
-          if (isAuthenticated && !authProvider.onboardingComplete) {
-            if (loc == '/onboarding') return null;
-            // Session restored on /sign-in → send straight to wizard
-            if (isAuthRoute) return '/onboarding';
-            if (isPublicRoute) return null;
-            return '/onboarding';
-          }
-
-          // Onboarded but terms not accepted (per-device / per-user prefs)
-          if (isAuthenticated &&
-              authProvider.onboardingComplete &&
-              !authProvider.termsAccepted) {
-            if (loc == '/terms-acceptance') return null;
-            return '/terms-acceptance';
-          }
-
-          // Logged in + onboarded: never stay on auth or onboarding
-          if (isAuthenticated && isAuthRoute) return '/main';
-          if (isAuthenticated &&
-              loc == '/onboarding' &&
-              authProvider.onboardingComplete) {
-            return '/main';
-          }
+        if (!isAuthenticated && !isAuthRoute && !isPublicRoute) {
+          return '/sign-in';
         }
+
+        // Logged in but onboarding not finished
+        if (isAuthenticated && !authProvider.onboardingComplete) {
+          if (loc == '/onboarding') return null;
+          if (isAuthRoute) return '/onboarding';
+          if (isPublicRoute) return null;
+          return '/onboarding';
+        }
+
+        // Onboarded but terms not accepted
+        if (isAuthenticated &&
+            authProvider.onboardingComplete &&
+            !authProvider.termsAccepted) {
+          if (loc == '/terms-acceptance') return null;
+          return '/terms-acceptance';
+        }
+
+        // Logged in + onboarded: never stay on auth or onboarding
+        if (isAuthenticated && isAuthRoute) return '/main';
+        if (isAuthenticated &&
+            loc == '/onboarding' &&
+            authProvider.onboardingComplete) {
+          return '/main';
+        }
+
         return null;
       },
       routes: [
@@ -111,6 +115,10 @@ class AppRouter {
         GoRoute(
             path: '/sign-up',
             builder: (context, state) => const SignUpScreen()),
+        // Root redirect — prevents GoException: no routes for location: /
+        GoRoute(
+            path: '/',
+            redirect: (_, __) => '/sign-in'),
 
         // ── Onboarding ────────────────────────────────────────────────────────
         GoRoute(
@@ -205,6 +213,14 @@ class AppRouter {
             builder: (context, state) => const TicketsScreen()),
         GoRoute(
             path: '/nft', builder: (context, state) => const NFTScreen()),
+
+        // ── Gallery (replaces "Shop") ───────────────────────────────────────
+        GoRoute(
+            path: '/create-gallery',
+            builder: (context, state) => const CreateGalleryScreen()),
+        GoRoute(
+            path: '/create-shop', // backward-compat alias
+            redirect: (_, __) => '/create-gallery'),
 
         // ── Artworks & Checkout ───────────────────────────────────────────────
         GoRoute(
@@ -330,7 +346,11 @@ class AppRouter {
         // ── Upload ───────────────────────────────────────────────────────────
         GoRoute(
             path: '/upload',
-            builder: (context, state) => const UploadArtworkScreen()),
+            builder: (context, state) {
+              final shopId = state.uri.queryParameters['shopId'];
+              final shopName = state.uri.queryParameters['shopName'];
+              return UploadArtworkScreen(shopId: shopId, shopName: shopName);
+            }),
 
         // ── AI Art Assistant ────────────────────────────────────────────────
         GoRoute(

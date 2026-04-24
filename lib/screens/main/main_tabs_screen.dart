@@ -14,6 +14,7 @@ import '../../providers/theme_provider.dart';
 import '../../widgets/onboarding_guide.dart';
 import '../../widgets/artyug_search_bar.dart';
 import '../../widgets/profile_sheet.dart';
+import '../../widgets/shop_selector_sheet.dart';
 import '../explore/explore_screen.dart';
 import '../profile/profile_screen.dart';
 
@@ -169,6 +170,26 @@ class _MainTabsScreenState extends State<MainTabsScreen> {
       context.push(item.route!);
     }
   }
+
+  Future<void> _handleUpload(BuildContext context) async {
+    // ShopSelectorSheet returns:
+    //   Map<String,dynamic> → user chose a specific shop
+    //   null               → user chose "Portfolio Only" (confirmed via button)
+    //                        OR user swiped to dismiss (we navigate anyway)
+    final result = await ShopSelectorSheet.show(context);
+
+    if (!mounted) return;
+
+    if (result != null) {
+      final shopId = Uri.encodeComponent(result['id']?.toString() ?? '');
+      final shopName = Uri.encodeComponent(result['name']?.toString() ?? '');
+      context.push('/upload?shopId=$shopId&shopName=$shopName');
+    } else {
+      // Portfolio only or dismissed — open upload with no shop attached
+      context.push('/upload');
+    }
+  }
+
 
   bool _isItemActive(_NavItem item, int currentIndex) {
     if (item.tabIndex != null) {
@@ -344,7 +365,7 @@ class _MainTabsScreenState extends State<MainTabsScreen> {
       bottomNavigationBar: _BottomNavWithUpload(
         currentIndex: currentIndex,
         onTap: (i) => context.read<MainTabProvider>().setIndex(i),
-        onUpload: () => context.push('/upload'),
+        onUpload: () => _handleUpload(context),
       ),
     );
   }
@@ -989,6 +1010,149 @@ class _ModeOption extends StatelessWidget {
               ),
             ),
             if (active) Icon(Icons.check_circle_rounded, color: color),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Custom bottom nav bar with centered Upload button ─────────────────────────
+
+class _BottomNavWithUpload extends StatelessWidget {
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+  final VoidCallback onUpload;
+
+  const _BottomNavWithUpload({
+    required this.currentIndex,
+    required this.onTap,
+    required this.onUpload,
+  });
+
+  // Tab indices skip the phantom centre slot
+  // Layout: 0=Home  1=Explore  [Upload]  2=Dashboard  3=Profile
+  static const _icons = [
+    Icons.home_rounded,
+    Icons.explore_rounded,
+    Icons.dashboard_customize_rounded,
+    Icons.person_rounded,
+  ];
+  static const _labels = ['Home', 'Explore', 'Dashboard', 'Profile'];
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? const Color(0xFF111116) : cs.surface;
+    final dividerColor = isDark
+        ? Colors.white.withValues(alpha: 0.08)
+        : Colors.black.withValues(alpha: 0.08);
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        height: 64,
+        decoration: BoxDecoration(
+          color: bg,
+          border: Border(top: BorderSide(color: dividerColor)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Left two: Home + Explore
+            for (int i = 0; i < 2; i++) _BottomNavItem(
+              icon: _icons[i],
+              label: _labels[i],
+              selected: currentIndex == i,
+              onTap: () => onTap(i),
+            ),
+
+            // Centre — Upload pill button
+            Center(
+              child: GestureDetector(
+                onTap: onUpload,
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(32),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.45),
+                        blurRadius: 16,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.add_photo_alternate_rounded,
+                          color: Colors.white, size: 20),
+                      SizedBox(width: 6),
+                      Text(
+                        'Upload',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Right two: Dashboard + Profile
+            for (int i = 2; i < 4; i++) _BottomNavItem(
+              icon: _icons[i],
+              label: _labels[i],
+              selected: currentIndex == i,
+              onTap: () => onTap(i),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BottomNavItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _BottomNavItem({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? AppColors.primary : AppColors.textSecondaryOf(context);
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(height: 3),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 10,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
           ],
         ),
       ),
