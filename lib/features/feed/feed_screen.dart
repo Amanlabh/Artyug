@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/config/canonical_guilds.dart';
 import '../../core/config/supabase_client.dart';
 import '../../core/utils/supabase_media_url.dart';
 import '../../core/theme/app_colors.dart';
@@ -41,6 +42,7 @@ class _FeedScreenState extends State<FeedScreen> {
   String _smartSort = 'Newest';
   List<Map<String, dynamic>> _liveAuctions = const [];
   bool _liveAuctionsLoading = true;
+  List<_CommunityItem> _officialCommunityItems = const [];
   List<String> _followedArtistIds = const [];
   List<String> _followedStudioIds = const [];
   List<String> _recentViewedArtworkIds = const [];
@@ -150,30 +152,8 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   List<_CommunityItem> _buildCommunityItems(List<PaintingModel> paintings) {
-    if (paintings.isEmpty) return _fallbackCommunities;
-
-    final categoryCount = <String, int>{};
-    for (final p in paintings) {
-      final key = (p.category?.trim().isNotEmpty ?? false)
-          ? p.category!.trim()
-          : 'General Art';
-      categoryCount[key] = (categoryCount[key] ?? 0) + 1;
-    }
-
-    final sorted = categoryCount.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-
-    return sorted
-        .take(5)
-        .map(
-          (entry) => _CommunityItem(
-            name: '${entry.key} Guild',
-            description:
-                'Collectors and creators discussing ${entry.key.toLowerCase()} trends and drops.',
-            members: '${(entry.value * 120) + 900} members',
-          ),
-        )
-        .toList();
+    if (_officialCommunityItems.isNotEmpty) return _officialCommunityItems;
+    return _fallbackCommunities;
   }
 
   Future<void> _loadRecentActivity() async {
@@ -279,9 +259,69 @@ class _FeedScreenState extends State<FeedScreen> {
   Future<void> _loadSmartHomeData() async {
     await Future.wait([
       _loadLiveAuctions(),
+      _loadOfficialCommunities(),
       _loadFollowGraph(),
       _loadRecentViewed(),
     ]);
+  }
+
+  Future<void> _loadOfficialCommunities() async {
+    try {
+      final rows = await CanonicalGuilds.fetchOfficialCommunities(
+          SupabaseClientHelper.db);
+      final items = await Future.wait(
+        rows.map((row) async {
+          final memberCount = await _fetchCommunityMemberCount(row);
+          final name = (row['name'] as String?)?.trim();
+          return _CommunityItem(
+            name: (name?.isNotEmpty ?? false) ? name! : 'Artyug Community',
+            description: _communityDescription(row),
+            members: '${_formatCount(memberCount)} members',
+          );
+        }),
+      );
+      if (!mounted) return;
+      setState(() => _officialCommunityItems = items);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _officialCommunityItems = const []);
+    }
+  }
+
+  Future<int> _fetchCommunityMemberCount(Map<String, dynamic> row) async {
+    final presetCount = (row['member_count'] as num?)?.toInt();
+    if (presetCount != null && presetCount > 0) return presetCount;
+    final communityId = row['id']?.toString();
+    if (communityId == null || communityId.isEmpty) return 0;
+    final memberRows = await SupabaseClientHelper.db
+        .from('community_members')
+        .select('id')
+        .eq('community_id', communityId);
+    return (memberRows as List).length;
+  }
+
+  String _communityDescription(Map<String, dynamic> row) {
+    final description = (row['description'] as String?)?.trim();
+    if (description != null && description.isNotEmpty) return description;
+    final name = (row['name'] as String?)?.toLowerCase() ?? '';
+    if (name.contains('artyug')) {
+      return 'An iconic community curated thoughtfully for artists and collectors.';
+    }
+    if (name.contains('motojojo')) {
+      return 'Creators and collectors in the Motojojo circle sharing culture and collabs.';
+    }
+    if (name.contains('webcoin')) {
+      return 'Onchain creators exploring drops, experiments, and verified digital ownership.';
+    }
+    return 'Collective spaces where creators and collectors connect.';
+  }
+
+  String _formatCount(int count) {
+    final digits = count.toString();
+    return digits.replaceAllMapped(
+      RegExp(r'\B(?=(\d{3})+(?!\d))'),
+      (_) => ',',
+    );
   }
 
   Future<void> _loadLiveAuctions() async {
@@ -2255,7 +2295,7 @@ class _LiveAuctionsNowRail extends StatelessWidget {
               .cast<PaintingModel?>()
               .firstWhere((e) => e != null, orElse: () => null);
           final endAt = DateTime.tryParse((a['end_time'] ?? '').toString());
-          final remain = endAt == null ? '--' : _relativeTime(endAt);
+          final remain = endAt == null ? '--' : _relativeAuctionEndLabel(endAt);
           final high = (a['current_highest_bid'] as num?)?.toDouble() ?? 0;
           final image = p?.resolvedImageUrl.trim() ?? '';
           return Container(
@@ -2316,7 +2356,7 @@ class _LiveAuctionsNowRail extends StatelessWidget {
                               color: AppColors.textSecondaryOf(context),
                               fontSize: 12)),
                       const SizedBox(height: 4),
-                      Text('Ends in $remain',
+                      Text(remain,
                           style: const TextStyle(
                               color: AppColors.primary,
                               fontSize: 12,
@@ -2379,6 +2419,11 @@ String _relativeTime(DateTime time) {
   if (abs.inMinutes < 60) return '${abs.inMinutes}m ${past ? 'ago' : 'left'}';
   if (abs.inHours < 24) return '${abs.inHours}h ${past ? 'ago' : 'left'}';
   return '${abs.inDays}d ${past ? 'ago' : 'left'}';
+}
+
+String _relativeAuctionEndLabel(DateTime time) {
+  final relative = _relativeTime(time);
+  return relative.contains('ago') ? 'Ended $relative' : 'Ends in $relative';
 }
 
 class _SectionHeader extends StatelessWidget {
@@ -3769,21 +3814,22 @@ const _fallbackArtists = [
 
 const _fallbackCommunities = [
   _CommunityItem(
-    name: 'Artyug Pixel Guild',
+    name: 'Artyug Community',
     description:
-        'Daily curation of digital and generative artwork from emerging artists.',
-    members: '3,240 members',
+        'An iconic community curated thoughtfully for artists and collectors.',
+    members: '14 members',
   ),
   _CommunityItem(
-    name: 'Verified Collectors Circle',
+    name: 'Motojojo',
     description:
-        'Certificate-first collectors sharing high-trust listings and discoveries.',
-    members: '1,180 members',
+        'Creators and collectors in the Motojojo circle sharing culture and collabs.',
+    members: '12 members',
   ),
   _CommunityItem(
-    name: 'Live Drops Arena',
-    description: 'Follow upcoming timed releases and artist launch calendars.',
-    members: '2,030 members',
+    name: 'Webcoin Labs',
+    description:
+        'Onchain creators exploring drops, experiments, and verified digital ownership.',
+    members: '10 members',
   ),
 ];
 

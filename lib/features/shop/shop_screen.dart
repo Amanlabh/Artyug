@@ -24,7 +24,8 @@ class ShopScreen extends StatefulWidget {
 
 class _ShopScreenState extends State<ShopScreen> {
   final _client = Supabase.instance.client;
-  final _currency = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+  final _currency =
+      NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
   final _sortOptions = const {
     'trending': 'Trending',
@@ -97,7 +98,8 @@ class _ShopScreenState extends State<ShopScreen> {
         _allArtworks = artworks;
         _trending = _sortByTrending(artworks).take(10).toList();
         _recent = List<PaintingModel>.from(artworks)
-          ..sort((a, b) => (b.createdAt ?? DateTime(1970)).compareTo(a.createdAt ?? DateTime(1970)));
+          ..sort((a, b) => (b.createdAt ?? DateTime(1970))
+              .compareTo(a.createdAt ?? DateTime(1970)));
         _endingSoonAuctions = auctions.take(10).toList();
         _featuredArtists = artists;
         _popularShops = shops;
@@ -115,30 +117,22 @@ class _ShopScreenState extends State<ShopScreen> {
 
   Future<List<PaintingModel>> _fetchArtworks() async {
     try {
-      final rows = await _client
-          .from('paintings')
-          .select('''
+      final rows = await _client.from('paintings').select('''
             id, artist_id, title, description, medium, dimensions, image_url, additional_images,
             price, is_for_sale, is_sold, style_tags, category, created_at, listing_type, status,
             is_verified, nfc_status, solana_tx_id, views_count, likes_count, bids_count, purchases_count,
             creator_location, shop_id, collection_id, currency,
             profiles:artist_id(display_name, profile_picture_url, is_verified)
-          ''')
-          .order('created_at', ascending: false)
-          .limit(140);
+          ''').order('created_at', ascending: false).limit(140);
 
       return _mapPaintings(rows as List<dynamic>);
     } catch (_) {
       // Backward-compatible fallback for environments missing new columns.
-      final rows = await _client
-          .from('paintings')
-          .select('''
+      final rows = await _client.from('paintings').select('''
             id, artist_id, title, description, medium, dimensions, image_url, additional_images,
             price, is_for_sale, is_sold, style_tags, category, created_at,
             profiles:artist_id(display_name, profile_picture_url, is_verified)
-          ''')
-          .order('created_at', ascending: false)
-          .limit(140);
+          ''').order('created_at', ascending: false).limit(140);
       return _mapPaintings(rows as List<dynamic>);
     }
   }
@@ -171,7 +165,8 @@ class _ShopScreenState extends State<ShopScreen> {
     try {
       final rows = await _client
           .from('profiles')
-          .select('id, display_name, username, profile_picture_url, is_verified, artist_type, followers_count')
+          .select(
+              'id, display_name, username, profile_picture_url, is_verified, artist_type, followers_count')
           .eq('role', 'creator')
           .order('followers_count', ascending: false)
           .limit(10);
@@ -185,7 +180,8 @@ class _ShopScreenState extends State<ShopScreen> {
     try {
       final rows = await _client
           .from('shops')
-          .select('id, name, slug, description, avatar_url, cover_image_url, status, is_active')
+          .select(
+              'id, name, slug, description, avatar_url, cover_image_url, status, is_active')
           .order('created_at', ascending: false)
           .limit(12);
       return List<Map<String, dynamic>>.from(rows as List);
@@ -209,7 +205,8 @@ class _ShopScreenState extends State<ShopScreen> {
     final likes = p.likesCount;
     final bids = p.bidsCount;
     final purchases = p.purchasesCount;
-    final ageDays = DateTime.now().difference(p.createdAt ?? DateTime.now()).inDays;
+    final ageDays =
+        DateTime.now().difference(p.createdAt ?? DateTime.now()).inDays;
     final recencyBoost = (30 - ageDays).clamp(0, 30);
     return (views * 1) +
         (likes * 3) +
@@ -226,7 +223,11 @@ class _ShopScreenState extends State<ShopScreen> {
     }
 
     if (_medium != 'All') {
-      list = list.where((p) => (p.medium ?? p.category ?? '').toLowerCase().contains(_medium.toLowerCase())).toList();
+      list = list
+          .where((p) => (p.medium ?? p.category ?? '')
+              .toLowerCase()
+              .contains(_medium.toLowerCase()))
+          .toList();
     }
 
     if (_styleQuery.trim().isNotEmpty) {
@@ -240,11 +241,15 @@ class _ShopScreenState extends State<ShopScreen> {
 
     if (_locationQuery.trim().isNotEmpty) {
       final q = _locationQuery.trim().toLowerCase();
-      list = list.where((p) => (p.creatorLocation ?? '').toLowerCase().contains(q)).toList();
+      list = list
+          .where((p) => (p.creatorLocation ?? '').toLowerCase().contains(q))
+          .toList();
     }
 
     if (_verifiedOnly) {
-      list = list.where((p) => p.isVerifiedArtwork || p.artistIsVerified == true).toList();
+      list = list
+          .where((p) => p.isVerifiedArtwork || p.artistIsVerified == true)
+          .toList();
     }
 
     if (_nfcOnly) {
@@ -252,7 +257,9 @@ class _ShopScreenState extends State<ShopScreen> {
     }
 
     if (_listingType != 'all') {
-      list = list.where((p) => (p.listingType ?? 'fixed_price') == _listingType).toList();
+      list = list
+          .where((p) => (p.listingType ?? 'fixed_price') == _listingType)
+          .toList();
     }
 
     switch (_priceRange) {
@@ -260,10 +267,14 @@ class _ShopScreenState extends State<ShopScreen> {
         list = list.where((p) => (p.price ?? 0) <= 10000).toList();
         break;
       case '10000-50000':
-        list = list.where((p) => (p.price ?? 0) >= 10000 && (p.price ?? 0) <= 50000).toList();
+        list = list
+            .where((p) => (p.price ?? 0) >= 10000 && (p.price ?? 0) <= 50000)
+            .toList();
         break;
       case '50000-200000':
-        list = list.where((p) => (p.price ?? 0) >= 50000 && (p.price ?? 0) <= 200000).toList();
+        list = list
+            .where((p) => (p.price ?? 0) >= 50000 && (p.price ?? 0) <= 200000)
+            .toList();
         break;
       case '200000+':
         list = list.where((p) => (p.price ?? 0) >= 200000).toList();
@@ -297,7 +308,8 @@ class _ShopScreenState extends State<ShopScreen> {
         });
         break;
       case 'newest':
-        list.sort((a, b) => (b.createdAt ?? DateTime(1970)).compareTo(a.createdAt ?? DateTime(1970)));
+        list.sort((a, b) => (b.createdAt ?? DateTime(1970))
+            .compareTo(a.createdAt ?? DateTime(1970)));
         break;
       default:
         list = _sortByTrending(list);
@@ -309,8 +321,8 @@ class _ShopScreenState extends State<ShopScreen> {
         : List<PaintingModel>.from(list);
     final recentRail = List<PaintingModel>.from(list)
       ..sort(
-        (a, b) =>
-            (b.createdAt ?? DateTime(1970)).compareTo(a.createdAt ?? DateTime(1970)),
+        (a, b) => (b.createdAt ?? DateTime(1970))
+            .compareTo(a.createdAt ?? DateTime(1970)),
       );
 
     setState(() {
@@ -355,7 +367,9 @@ class _ShopScreenState extends State<ShopScreen> {
                 ),
                 if (_loading)
                   const SliverFillRemaining(
-                    child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+                    child: Center(
+                        child: CircularProgressIndicator(
+                            color: AppColors.primary)),
                   )
                 else if (_error != null)
                   SliverFillRemaining(
@@ -365,28 +379,39 @@ class _ShopScreenState extends State<ShopScreen> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.error_outline_rounded, color: AppColors.textTertiary, size: 44),
+                            const Icon(Icons.error_outline_rounded,
+                                color: AppColors.textTertiary, size: 44),
                             const SizedBox(height: 10),
-                            Text(_error!, style: const TextStyle(color: AppColors.textSecondary), textAlign: TextAlign.center),
+                            Text(_error!,
+                                style: const TextStyle(
+                                    color: AppColors.textSecondary),
+                                textAlign: TextAlign.center),
                             const SizedBox(height: 12),
-                            OutlinedButton(onPressed: _load, child: const Text('Retry')),
+                            OutlinedButton(
+                                onPressed: _load, child: const Text('Retry')),
                           ],
                         ),
                       ),
                     ),
                   )
                 else ...[
-                  _sectionHeader('Trending Artworks', 'High momentum right now'),
+                  _sectionHeader(
+                      'Trending Artworks', 'High momentum right now'),
                   _artworkStrip(_trending),
-                  _sectionHeader('Recently Listed', 'Fresh artworks in the marketplace'),
+                  _sectionHeader(
+                      'Recently Listed', 'Fresh artworks in the marketplace'),
                   _artworkStrip(_recent.take(12).toList()),
-                  _sectionHeader('Ending Soon Auctions', 'Bid windows closing soon'),
+                  _sectionHeader(
+                      'Ending Soon Auctions', 'Bid windows closing soon'),
                   _auctionStrip(_endingSoonAuctions),
-                  _sectionHeader('Featured Artists', 'Creators collectors are following'),
+                  _sectionHeader(
+                      'Featured Artists', 'Creators collectors are following'),
                   _artistsStrip(),
-                    _sectionHeader('Popular Studios', 'Explore curated artist studios'),
-                    _shopsStrip(),
-                  _sectionHeader('Discover Artworks', 'Filtered and sorted results'),
+                  _sectionHeader(
+                      'Popular Studios', 'Explore curated artist studios'),
+                  _shopsStrip(),
+                  _sectionHeader(
+                      'Discover Artworks', 'Filtered and sorted results'),
                   _resultsGrid(),
                 ],
               ],
@@ -413,7 +438,8 @@ class _ShopScreenState extends State<ShopScreen> {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: AppColors.border),
               ),
-              child: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
+              child: const Icon(Icons.arrow_back_rounded,
+                  color: AppColors.textPrimary),
             ),
           ),
           const SizedBox(width: 12),
@@ -423,9 +449,15 @@ class _ShopScreenState extends State<ShopScreen> {
               children: [
                 Text(
                   'Marketplace',
-                  style: TextStyle(color: AppColors.textPrimary, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: -0.7),
+                  style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.7),
                 ),
-                    Text('Trending, auctions, studios, and verified artworks', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                Text('Trending, auctions, studios, and verified artworks',
+                    style: TextStyle(
+                        color: AppColors.textSecondary, fontSize: 12)),
               ],
             ),
           ),
@@ -437,14 +469,19 @@ class _ShopScreenState extends State<ShopScreen> {
               decoration: BoxDecoration(
                 color: AppColors.error.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.error.withValues(alpha: 0.35)),
+                border:
+                    Border.all(color: AppColors.error.withValues(alpha: 0.35)),
               ),
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(Icons.gavel_rounded, color: AppColors.error, size: 14),
                   SizedBox(width: 6),
-                  Text('Auctions', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w700, fontSize: 12)),
+                  Text('Auctions',
+                      style: TextStyle(
+                          color: AppColors.error,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12)),
                 ],
               ),
             ),
@@ -478,17 +515,21 @@ class _ShopScreenState extends State<ShopScreen> {
               final values = _priceRanges.entries.map((e) => e.value).toList();
               final picked = await _pickOne(context, 'Price Range', values);
               if (picked == null) return;
-              final key = _priceRanges.entries.firstWhere((e) => e.value == picked).key;
+              final key =
+                  _priceRanges.entries.firstWhere((e) => e.value == picked).key;
               setState(() => _priceRange = key);
               _applyFilters();
             },
           ),
           _FilterChipButton(
-            label: _listingType == 'all' ? 'All Listings' : _listingType.replaceAll('_', ' '),
+            label: _listingType == 'all'
+                ? 'All Listings'
+                : _listingType.replaceAll('_', ' '),
             icon: Icons.sell_outlined,
             onTap: () async {
               const values = ['all', 'fixed_price', 'auction', 'open_offer'];
-              final picked = await _pickOne(context, 'Listing Type', values.map((e) => e.replaceAll('_', ' ')).toList());
+              final picked = await _pickOne(context, 'Listing Type',
+                  values.map((e) => e.replaceAll('_', ' ')).toList());
               if (picked == null) return;
               setState(() => _listingType = picked.replaceAll(' ', '_'));
               _applyFilters();
@@ -562,7 +603,9 @@ class _ShopScreenState extends State<ShopScreen> {
   Widget _buildSortAndCount() {
     return Row(
       children: [
-        Text('${_filtered.length} artworks', style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+        Text('${_filtered.length} artworks',
+            style:
+                const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
         const Spacer(),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
@@ -576,9 +619,11 @@ class _ShopScreenState extends State<ShopScreen> {
             underline: const SizedBox.shrink(),
             isDense: true,
             dropdownColor: AppColors.surfaceVariant,
-            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            style:
+                const TextStyle(color: AppColors.textSecondary, fontSize: 12),
             items: _sortOptions.entries
-                .map((entry) => DropdownMenuItem(value: entry.key, child: Text(entry.value)))
+                .map((entry) => DropdownMenuItem(
+                    value: entry.key, child: Text(entry.value)))
                 .toList(),
             onChanged: (value) {
               if (value == null) return;
@@ -598,9 +643,16 @@ class _ShopScreenState extends State<ShopScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: const TextStyle(color: AppColors.textPrimary, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+            Text(title,
+                style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.5)),
             const SizedBox(height: 2),
-            Text(subtitle, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+            Text(subtitle,
+                style: const TextStyle(
+                    color: AppColors.textSecondary, fontSize: 12)),
           ],
         ),
       ),
@@ -631,8 +683,8 @@ class _ShopScreenState extends State<ShopScreen> {
             child: _ArtworkCard(
               artwork: artworks[i],
               currency: _currency,
-              onTap: () =>
-                  context.push('/artwork/${artworks[i].id}', extra: artworks[i]),
+              onTap: () => context.push('/artwork/${artworks[i].id}',
+                  extra: artworks[i]),
             ),
           ),
         ),
@@ -664,7 +716,8 @@ class _ShopScreenState extends State<ShopScreen> {
             final title = auction.painting?.title ?? 'Auction artwork';
             final image = auction.painting?.resolvedImageUrl ?? '';
             return GestureDetector(
-              onTap: () => context.push('/auction/${auction.id}', extra: auction),
+              onTap: () =>
+                  context.push('/auction/${auction.id}', extra: auction),
               child: Container(
                 width: 290,
                 decoration: BoxDecoration(
@@ -679,7 +732,8 @@ class _ShopScreenState extends State<ShopScreen> {
                       width: 116,
                       child: image.isEmpty
                           ? Container(color: AppColors.surfaceVariant)
-                          : CachedNetworkImage(imageUrl: image, fit: BoxFit.cover),
+                          : CachedNetworkImage(
+                              imageUrl: image, fit: BoxFit.cover),
                     ),
                     Expanded(
                       child: Padding(
@@ -687,13 +741,24 @@ class _ShopScreenState extends State<ShopScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+                            Text(title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    color: AppColors.textPrimary,
+                                    fontWeight: FontWeight.w700)),
                             const Spacer(),
-                            Text('Highest: ${auction.currentHighestBid == null ? "No bids yet" : _currency.format(auction.currentHighestBid)}',
-                                style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 12)),
+                            Text(
+                                'Highest: ${auction.currentHighestBid == null ? "No bids yet" : _currency.format(auction.currentHighestBid)}',
+                                style: const TextStyle(
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12)),
                             const SizedBox(height: 2),
-                            Text('Ends in ${auction.formattedTimeRemaining}',
-                                style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                            Text(auction.relativeEndLabel,
+                                style: const TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 12)),
                           ],
                         ),
                       ),
@@ -714,7 +779,8 @@ class _ShopScreenState extends State<ShopScreen> {
         child: _PremiumEmptyState(
           icon: Icons.person_search_outlined,
           title: 'No featured artists yet',
-          subtitle: 'Artist highlights will appear when creator data is available.',
+          subtitle:
+              'Artist highlights will appear when creator data is available.',
           cta: 'Explore artworks',
         ),
       );
@@ -729,7 +795,9 @@ class _ShopScreenState extends State<ShopScreen> {
           itemCount: _featuredArtists.length,
           itemBuilder: (_, i) {
             final artist = _featuredArtists[i];
-            final name = artist['display_name']?.toString() ?? artist['username']?.toString() ?? 'Artist';
+            final name = artist['display_name']?.toString() ??
+                artist['username']?.toString() ??
+                'Artist';
             final avatar = artist['profile_picture_url']?.toString();
             return GestureDetector(
               onTap: () => context.push('/public-profile/${artist['id']}'),
@@ -746,12 +814,21 @@ class _ShopScreenState extends State<ShopScreen> {
                     CircleAvatar(
                       radius: 24,
                       backgroundColor: AppColors.surfaceVariant,
-                      backgroundImage: avatar != null && avatar.isNotEmpty ? CachedNetworkImageProvider(avatar) : null,
-                      child: avatar == null || avatar.isEmpty ? Text(name.substring(0, 1).toUpperCase()) : null,
+                      backgroundImage: avatar != null && avatar.isNotEmpty
+                          ? CachedNetworkImageProvider(avatar)
+                          : null,
+                      child: avatar == null || avatar.isEmpty
+                          ? Text(name.substring(0, 1).toUpperCase())
+                          : null,
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+                      child: Text(name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w700)),
                     ),
                   ],
                 ),
@@ -768,8 +845,8 @@ class _ShopScreenState extends State<ShopScreen> {
       return const SliverToBoxAdapter(
         child: _PremiumEmptyState(
           icon: Icons.storefront_outlined,
-                    title: 'No popular studios yet',
-                    subtitle: 'Studios appear here when creators publish their space.',
+          title: 'No popular studios yet',
+          subtitle: 'Studios appear here when creators publish their space.',
           cta: 'Browse marketplace',
         ),
       );
@@ -784,7 +861,7 @@ class _ShopScreenState extends State<ShopScreen> {
           itemCount: _popularShops.length,
           itemBuilder: (_, i) {
             final shop = _popularShops[i];
-                          final name = shop['name']?.toString() ?? 'Studio';
+            final name = shop['name']?.toString() ?? 'Studio';
             final slug = shop['slug']?.toString();
             final cover = shop['cover_image_url']?.toString();
             return GestureDetector(
@@ -808,12 +885,19 @@ class _ShopScreenState extends State<ShopScreen> {
                       CachedNetworkImage(imageUrl: cover, fit: BoxFit.cover)
                     else
                       Container(color: AppColors.surfaceVariant),
-                    const DecoratedBox(decoration: BoxDecoration(gradient: AppColors.cardOverlay)),
+                    const DecoratedBox(
+                        decoration:
+                            BoxDecoration(gradient: AppColors.cardOverlay)),
                     Positioned(
                       left: 12,
                       right: 12,
                       bottom: 12,
-                      child: Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+                      child: Text(name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800)),
                     ),
                   ],
                 ),
@@ -853,7 +937,8 @@ class _ShopScreenState extends State<ShopScreen> {
           (_, i) => _ArtworkCard(
             artwork: _filtered[i],
             currency: _currency,
-            onTap: () => context.push('/artwork/${_filtered[i].id}', extra: _filtered[i]),
+            onTap: () => context.push('/artwork/${_filtered[i].id}',
+                extra: _filtered[i]),
           ),
           childCount: _filtered.length,
         ),
@@ -861,7 +946,8 @@ class _ShopScreenState extends State<ShopScreen> {
     );
   }
 
-  Future<String?> _pickOne(BuildContext context, String title, List<String> options) async {
+  Future<String?> _pickOne(
+      BuildContext context, String title, List<String> options) async {
     return showModalBottomSheet<String>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -871,7 +957,8 @@ class _ShopScreenState extends State<ShopScreen> {
           child: Container(
             decoration: BoxDecoration(
               color: AppColors.surface,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(20)),
               border: Border.all(color: AppColors.border),
             ),
             child: SafeArea(
@@ -880,11 +967,16 @@ class _ShopScreenState extends State<ShopScreen> {
                 children: [
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
-                    child: Text(title, style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w800)),
+                    child: Text(title,
+                        style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w800)),
                   ),
                   ...options.map(
                     (opt) => ListTile(
-                      title: Text(opt, style: const TextStyle(color: AppColors.textSecondary)),
+                      title: Text(opt,
+                          style:
+                              const TextStyle(color: AppColors.textSecondary)),
                       onTap: () => Navigator.pop(context, opt),
                     ),
                   ),
@@ -897,21 +989,27 @@ class _ShopScreenState extends State<ShopScreen> {
     );
   }
 
-  Future<void> _askText(String title, String current, ValueChanged<String> onSaved) async {
+  Future<void> _askText(
+      String title, String current, ValueChanged<String> onSaved) async {
     final ctrl = TextEditingController(text: current);
     final result = await showDialog<String>(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: AppColors.surface,
-        title: Text(title, style: const TextStyle(color: AppColors.textPrimary)),
+        title:
+            Text(title, style: const TextStyle(color: AppColors.textPrimary)),
         content: TextField(
           controller: ctrl,
           style: const TextStyle(color: AppColors.textPrimary),
           decoration: const InputDecoration(hintText: 'Type to filter'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, null), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, ctrl.text.trim()), child: const Text('Apply')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, null),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, ctrl.text.trim()),
+              child: const Text('Apply')),
         ],
       ),
     );
@@ -935,7 +1033,9 @@ class _ArtworkCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final listing = artwork.listingType ?? 'fixed_price';
-    final badge = listing == 'auction' ? 'Auction' : (listing == 'open_offer' ? 'Open Offer' : 'Buy Now');
+    final badge = listing == 'auction'
+        ? 'Auction'
+        : (listing == 'open_offer' ? 'Open Offer' : 'Buy Now');
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -954,28 +1054,37 @@ class _ArtworkCard extends StatelessWidget {
                 fit: StackFit.expand,
                 children: [
                   if (artwork.resolvedImageUrl.isNotEmpty)
-                    CachedNetworkImage(imageUrl: artwork.resolvedImageUrl, fit: BoxFit.cover)
+                    CachedNetworkImage(
+                        imageUrl: artwork.resolvedImageUrl, fit: BoxFit.cover)
                   else
                     Container(color: AppColors.surfaceVariant),
-                  const DecoratedBox(decoration: BoxDecoration(gradient: AppColors.cardOverlay)),
+                  const DecoratedBox(
+                      decoration:
+                          BoxDecoration(gradient: AppColors.cardOverlay)),
                   Positioned(
                     top: 8,
                     left: 8,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: AppColors.background.withValues(alpha: 0.8),
                         borderRadius: BorderRadius.circular(999),
                         border: Border.all(color: AppColors.border),
                       ),
-                      child: Text(badge, style: const TextStyle(color: AppColors.textSecondary, fontSize: 10, fontWeight: FontWeight.w700)),
+                      child: Text(badge,
+                          style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700)),
                     ),
                   ),
                   if (artwork.isVerifiedArtwork)
                     const Positioned(
                       top: 8,
                       right: 8,
-                      child: Icon(Icons.verified_rounded, color: AppColors.primary, size: 18),
+                      child: Icon(Icons.verified_rounded,
+                          color: AppColors.primary, size: 18),
                     ),
                 ],
               ),
@@ -985,19 +1094,27 @@ class _ArtworkCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(artwork.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+                  Text(artwork.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w700)),
                   const SizedBox(height: 3),
                   Row(
                     children: [
                       CircleAvatar(
                         radius: 9,
                         backgroundColor: AppColors.accentSoftOf(context),
-                        foregroundImage: artwork.resolvedArtistAvatarUrl != null &&
-                                artwork.resolvedArtistAvatarUrl!.trim().isNotEmpty
-                            ? CachedNetworkImageProvider(
-                                artwork.resolvedArtistAvatarUrl!,
-                              )
-                            : null,
+                        foregroundImage:
+                            artwork.resolvedArtistAvatarUrl != null &&
+                                    artwork.resolvedArtistAvatarUrl!
+                                        .trim()
+                                        .isNotEmpty
+                                ? CachedNetworkImageProvider(
+                                    artwork.resolvedArtistAvatarUrl!,
+                                  )
+                                : null,
                         child: Text(
                           ((artwork.artistDisplayName ?? 'A').trim().isNotEmpty
                                   ? (artwork.artistDisplayName ?? 'A')
@@ -1030,15 +1147,22 @@ class _ArtworkCard extends StatelessWidget {
                   Row(
                     children: [
                       Text(
-                        artwork.price != null ? currency.format(artwork.price!) : 'Price on request',
-                        style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800),
+                        artwork.price != null
+                            ? currency.format(artwork.price!)
+                            : 'Price on request',
+                        style: const TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w800),
                       ),
                       const Spacer(),
                       Row(
                         children: [
-                          const Icon(Icons.visibility_outlined, size: 12, color: AppColors.textTertiary),
+                          const Icon(Icons.visibility_outlined,
+                              size: 12, color: AppColors.textTertiary),
                           const SizedBox(width: 3),
-                          Text('${artwork.viewsCount}', style: const TextStyle(fontSize: 11, color: AppColors.textTertiary)),
+                          Text('${artwork.viewsCount}',
+                              style: const TextStyle(
+                                  fontSize: 11, color: AppColors.textTertiary)),
                         ],
                       ),
                     ],
@@ -1090,9 +1214,16 @@ class _FilterChipButton extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 13, color: selected ? AppColors.primary : AppColors.textSecondary),
+            Icon(icon,
+                size: 13,
+                color: selected ? AppColors.primary : AppColors.textSecondary),
             const SizedBox(width: 6),
-            Text(label, style: TextStyle(color: selected ? AppColors.primary : AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w700)),
+            Text(label,
+                style: TextStyle(
+                    color:
+                        selected ? AppColors.primary : AppColors.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700)),
           ],
         ),
       ),
@@ -1138,11 +1269,20 @@ class _PremiumEmptyState extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+                  Text(title,
+                      style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w700)),
                   const SizedBox(height: 3),
-                  Text(subtitle, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                  Text(subtitle,
+                      style: const TextStyle(
+                          color: AppColors.textSecondary, fontSize: 12)),
                   const SizedBox(height: 5),
-                  Text(cta, style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 12)),
+                  Text(cta,
+                      style: const TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12)),
                 ],
               ),
             ),

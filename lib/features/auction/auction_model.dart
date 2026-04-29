@@ -60,6 +60,17 @@ class AuctionModel {
     return remaining.isNegative ? Duration.zero : remaining;
   }
 
+  String get relativeEndLabel {
+    final delta = endTime.difference(DateTime.now());
+    final past = delta.isNegative || isEnded;
+    final abs = delta.abs();
+    final compact = _formatCompactDuration(abs);
+    if (compact == null) {
+      return past ? 'Ended just now' : 'Ends in under 1m';
+    }
+    return past ? 'Ended $compact ago' : 'Ends in $compact';
+  }
+
   String get formattedTimeRemaining {
     final r = timeRemaining;
     if (r == Duration.zero) return 'Ended';
@@ -69,6 +80,13 @@ class AuctionModel {
     if (h > 0) return '${h}h ${m}m ${s}s';
     if (m > 0) return '${m}m ${s}s';
     return '${s}s';
+  }
+
+  String? _formatCompactDuration(Duration duration) {
+    if (duration.inMinutes < 1) return null;
+    if (duration.inHours < 1) return '${duration.inMinutes}m';
+    if (duration.inDays < 1) return '${duration.inHours}h';
+    return '${duration.inDays}d';
   }
 
   double get minimumNextBid {
@@ -89,10 +107,8 @@ class AuctionModel {
       currentHighestBid: json['current_highest_bid'] != null
           ? (json['current_highest_bid'] as num).toDouble()
           : null,
-      currentHighestBidderId:
-          json['current_highest_bidder_id'] as String?,
-      currentHighestBidderName:
-          json['current_highest_bidder_name'] as String?,
+      currentHighestBidderId: json['current_highest_bidder_id'] as String?,
+      currentHighestBidderName: json['current_highest_bidder_name'] as String?,
       currentHighestBidderAvatarUrl:
           json['current_highest_bidder_avatar_url'] as String?,
       startTime: DateTime.parse(json['start_time'] as String),
@@ -137,8 +153,8 @@ class BidModel {
       id: json['id'] as String,
       auctionId: json['auction_id'] as String,
       bidderId: json['bidder_id'] as String,
-      bidderName: json['bidder_name'] as String? ??
-          json['display_name'] as String?,
+      bidderName:
+          json['bidder_name'] as String? ?? json['display_name'] as String?,
       bidderAvatarUrl: json['bidder_avatar_url'] as String? ??
           json['profile_picture_url'] as String?,
       amount: (json['amount'] as num).toDouble(),
