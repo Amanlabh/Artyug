@@ -51,7 +51,8 @@ class OrderModel {
       buyerName: json['buyer_name'] as String?,
       sellerId: json['seller_id'] as String?,
       sellerName: json['seller_name'] as String?,
-      amount: json['amount'] != null ? (json['amount'] as num).toDouble() : null,
+      amount:
+          json['amount'] != null ? (json['amount'] as num).toDouble() : null,
       currency: json['currency'] as String?,
       paymentMethod: json['payment_method'] as String?,
       status: json['status'] as String? ?? 'pending',
@@ -69,18 +70,28 @@ class OrderModel {
 
   bool get isCompleted => status == 'completed';
   bool get hasCertificate => certificateId != null && authenticityEnabled;
-  bool get isDemoPurchase =>
-      purchaseMode != null && purchaseMode!.toLowerCase() == 'demo';
+  bool get isDemoPurchase {
+    final mode = purchaseMode?.toLowerCase().trim();
+    if (mode == 'demo' || mode == 'test') return true;
+    if (mode == 'live') return false;
+    final method = paymentMethod?.toLowerCase().trim();
+    if (method == 'test' || method == 'demo') return true;
+    if (method == 'razorpay' || method == 'stripe' || method == 'dodo') {
+      return false;
+    }
+    return false;
+  }
 
-  String get displayAmount => amount != null
-      ? '₹${amount!.toStringAsFixed(0)}'
-      : 'Free';
+  bool get isLivePurchase => !isDemoPurchase;
+
+  String get displayAmount =>
+      amount != null ? '₹${amount!.toStringAsFixed(0)}' : 'Free';
 
   String get statusLabel => switch (status) {
-    'completed' => 'Completed',
-    'pending' => 'Pending',
-    'cancelled' => 'Cancelled',
-    'failed' => 'Failed',
-    _ => status,
-  };
+        'completed' => 'Completed',
+        'pending' => 'Pending',
+        'cancelled' => 'Cancelled',
+        'failed' => 'Failed',
+        _ => status,
+      };
 }

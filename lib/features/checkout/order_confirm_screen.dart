@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -37,7 +38,8 @@ class OrderConfirmScreen extends StatelessWidget {
               const SizedBox(height: 8),
               _SuccessHeader(
                 isDemo: isDemoPurchase,
-                artworkTitle: order.artworkTitle ?? cert?.artworkTitle ?? 'Artwork',
+                artworkTitle:
+                    order.artworkTitle ?? cert?.artworkTitle ?? 'Artwork',
               ),
               if (isDemoPurchase) ...[
                 const SizedBox(height: 16),
@@ -73,7 +75,8 @@ class OrderConfirmScreen extends StatelessWidget {
                   onPressed: () => context.go('/main'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.textPrimary,
-                    side: const BorderSide(color: AppColors.borderStrong, width: 1.5),
+                    side: const BorderSide(
+                        color: AppColors.borderStrong, width: 1.5),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                   child: const Text('Continue Browsing'),
@@ -112,7 +115,8 @@ class _SuccessHeader extends StatelessWidget {
               ),
             ],
           ),
-          child: const Icon(Icons.check_rounded, color: AppColors.success, size: 40),
+          child: const Icon(Icons.check_rounded,
+              color: AppColors.success, size: 40),
         ),
         const SizedBox(height: 16),
         Text(
@@ -188,15 +192,15 @@ class _DemoModeBanner extends StatelessWidget {
             final c = cert;
             if (c != null && !c.isBlockchainAnchored) {
               return [
-            const SizedBox(height: 8),
-            Text(
-              'The on-chain hash below may be a placeholder until Solana is configured.',
-              style: TextStyle(
-                fontSize: 11.5,
-                height: 1.45,
-                color: AppColors.textTertiary,
-              ),
-            ),
+                const SizedBox(height: 8),
+                Text(
+                  'The on-chain hash below may be a placeholder until Solana is configured.',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    height: 1.45,
+                    color: AppColors.textTertiary,
+                  ),
+                ),
               ];
             }
             return <Widget>[];
@@ -327,20 +331,23 @@ class _OrderReceiptCard extends StatelessWidget {
                             width: 88,
                             height: 88,
                             color: const Color(0xFFE2E8F0),
-                            child: const Icon(Icons.image_outlined, color: Color(0xFF94A3B8)),
+                            child: const Icon(Icons.image_outlined,
+                                color: Color(0xFF94A3B8)),
                           ),
                           errorWidget: (_, __, ___) => Container(
                             width: 88,
                             height: 88,
                             color: const Color(0xFFE2E8F0),
-                            child: const Icon(Icons.broken_image_outlined, color: Color(0xFF94A3B8)),
+                            child: const Icon(Icons.broken_image_outlined,
+                                color: Color(0xFF94A3B8)),
                           ),
                         )
                       : Container(
                           width: 88,
                           height: 88,
                           color: const Color(0xFFE2E8F0),
-                          child: const Icon(Icons.palette_outlined, color: Color(0xFF94A3B8), size: 36),
+                          child: const Icon(Icons.palette_outlined,
+                              color: Color(0xFF94A3B8), size: 36),
                         ),
                 ),
                 const SizedBox(width: 14),
@@ -362,7 +369,8 @@ class _OrderReceiptCard extends StatelessWidget {
                       const SizedBox(height: 6),
                       Text(
                         'Qty: 1',
-                        style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                        style: TextStyle(
+                            fontSize: 13, color: Colors.grey.shade600),
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -416,7 +424,8 @@ class _OrderReceiptCard extends StatelessWidget {
                   children: [
                     Text(
                       'Order #',
-                      style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                      style:
+                          TextStyle(fontSize: 13, color: Colors.grey.shade600),
                     ),
                     Text(
                       _shortOrderId,
@@ -454,7 +463,8 @@ class _AuthenticityCertificate extends StatelessWidget {
   static const _goldDim = Color(0xFF8B7355);
   static const _innerBg = Color(0xFF0D1524);
 
-  Future<void> _openExplorerInBrowser(BuildContext context, String urlString) async {
+  Future<void> _openExplorerInBrowser(
+      BuildContext context, String urlString) async {
     final uri = Uri.tryParse(urlString);
     if (uri == null || (uri.scheme != 'https' && uri.scheme != 'http')) {
       if (context.mounted) {
@@ -465,9 +475,19 @@ class _AuthenticityCertificate extends StatelessWidget {
       return;
     }
     try {
-      var ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      var ok = await launchUrl(
+        uri,
+        mode: kIsWeb
+            ? LaunchMode.platformDefault
+            : LaunchMode.externalApplication,
+        webOnlyWindowName: '_blank',
+      );
       if (!ok) {
-        ok = await launchUrl(uri, mode: LaunchMode.platformDefault);
+        ok = await launchUrl(
+          uri,
+          mode: LaunchMode.platformDefault,
+          webOnlyWindowName: '_blank',
+        );
       }
       if (!context.mounted) return;
       if (!ok) {
@@ -493,8 +513,9 @@ class _AuthenticityCertificate extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final txSig = cert.transactionSignature;
-    final linkMode =
-        purchaseMode.toLowerCase() == 'demo' ? ChainMode.devnet : ChainMode.mainnet;
+    final linkMode = purchaseMode.toLowerCase() == 'demo'
+        ? ChainMode.devnet
+        : ChainMode.mainnet;
     final explorerUrl = txSig != null
         ? AppConfig.buildSolscanUrl(txSig, mode: linkMode)
         : solanaExplorerUrl ?? cert.solanaExplorerUrl;
@@ -568,9 +589,12 @@ class _AuthenticityCertificate extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
-                  cert.isBlockchainAnchored ? Icons.link_rounded : Icons.shield_outlined,
+                  cert.isBlockchainAnchored
+                      ? Icons.link_rounded
+                      : Icons.shield_outlined,
                   size: 15,
-                  color: cert.isBlockchainAnchored ? AppColors.primary : _goldDim,
+                  color:
+                      cert.isBlockchainAnchored ? AppColors.primary : _goldDim,
                 ),
                 const SizedBox(width: 6),
                 Text(
@@ -578,7 +602,8 @@ class _AuthenticityCertificate extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: cert.isBlockchainAnchored ? AppColors.primary : _gold,
+                    color:
+                        cert.isBlockchainAnchored ? AppColors.primary : _gold,
                   ),
                 ),
               ],
@@ -586,12 +611,17 @@ class _AuthenticityCertificate extends StatelessWidget {
             const SizedBox(height: 20),
             Row(
               children: [
-                Expanded(child: Divider(color: _gold.withValues(alpha: 0.35), thickness: 1)),
+                Expanded(
+                    child: Divider(
+                        color: _gold.withValues(alpha: 0.35), thickness: 1)),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 10),
-                  child: Icon(Icons.diamond_outlined, size: 14, color: _gold.withValues(alpha: 0.6)),
+                  child: Icon(Icons.diamond_outlined,
+                      size: 14, color: _gold.withValues(alpha: 0.6)),
                 ),
-                Expanded(child: Divider(color: _gold.withValues(alpha: 0.35), thickness: 1)),
+                Expanded(
+                    child: Divider(
+                        color: _gold.withValues(alpha: 0.35), thickness: 1)),
               ],
             ),
             const SizedBox(height: 22),
@@ -710,18 +740,22 @@ class _AuthenticityCertificate extends StatelessWidget {
               ],
             ),
             if (explorerUrl != null &&
-                (explorerUrl.startsWith('https://') || explorerUrl.startsWith('http://'))) ...[
+                (explorerUrl.startsWith('https://') ||
+                    explorerUrl.startsWith('http://'))) ...[
               const SizedBox(height: 16),
               Center(
                 child: FilledButton.tonalIcon(
                   onPressed: () => _openExplorerInBrowser(context, explorerUrl),
-                  icon: const Icon(Icons.open_in_new, size: 18, color: AppColors.primary),
+                  icon: const Icon(Icons.open_in_new,
+                      size: 18, color: AppColors.primary),
                   label: const Text(
                     'View on Solscan',
-                    style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                        color: AppColors.primary, fontWeight: FontWeight.w700),
                   ),
                   style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 12),
                     backgroundColor: AppColors.primary.withValues(alpha: 0.15),
                     foregroundColor: AppColors.primary,
                   ),

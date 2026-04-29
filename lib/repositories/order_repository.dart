@@ -28,20 +28,50 @@ class OrderRepository {
   static final _client = SupabaseClientHelper.db;
   static const _uuid = Uuid();
 
+  static Future<OrderResult?> _findExistingLiveOrderByPaymentId(
+    String razorpayPaymentId,
+  ) async {
+    try {
+      final data = await _client
+          .from('orders')
+          .select()
+          .eq('razorpay_payment_id', razorpayPaymentId)
+          .maybeSingle();
+      if (data == null) return null;
+      final order = OrderModel.fromJson(data);
+      CertificateModel? certificate;
+      final certId = order.certificateId;
+      if (certId != null && certId.isNotEmpty) {
+        final certData = await _client
+            .from('certificates')
+            .select()
+            .eq('id', certId)
+            .maybeSingle();
+        if (certData != null) {
+          certificate = CertificateModel.fromJson(certData);
+        }
+      }
+      return OrderResult(
+        order: order,
+        certificate: certificate,
+        solanaExplorerUrl: certificate?.solanaExplorerUrl,
+        purchaseMode: order.purchaseMode ?? 'live',
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Fetch a painting snapshot for checkout
   static Future<PaintingModel?> getPainting(String paintingId) async {
-    final data = await _client
-        .from('paintings')
-        .select('''
+    final data = await _client.from('paintings').select('''
           *,
           profiles!paintings_artist_id_fkey(
             display_name,
             profile_picture_url,
             is_verified
           )
-        ''')
-        .eq('id', paintingId)
-        .single();
+        ''').eq('id', paintingId).single();
     if (data.isEmpty) return null;
     return PaintingModel.fromJson({
       ...data,
@@ -167,6 +197,11 @@ class OrderRepository {
     final user = SupabaseClientHelper.currentUser;
     if (user == null) throw Exception('Not authenticated');
 
+    final existing = await _findExistingLiveOrderByPaymentId(
+      razorpayPaymentId,
+    );
+    if (existing != null) return existing;
+
     final painting = await getPainting(paintingId);
     if (painting == null) throw Exception('Artwork not found');
 
@@ -241,7 +276,8 @@ class OrderRepository {
         debugPrint('[OrderRepository] Live Solana hash: $blockchainHash');
         debugPrint('[OrderRepository] Explorer: $solanaExplorerUrl');
       } else {
-        debugPrint('[OrderRepository] Solana attestation skipped — order still recorded.');
+        debugPrint(
+            '[OrderRepository] Solana attestation skipped — order still recorded.');
       }
     }
 
@@ -306,18 +342,15 @@ class OrderRepository {
   static Future<OrderModel?> getOrder(String orderId) async {
     final userId = SupabaseClientHelper.currentUserId;
     if (userId == null) return null;
-    final data = await _client
-        .from('orders')
-        .select()
-        .eq('id', orderId)
-        .maybeSingle();
+    final data =
+        await _client.from('orders').select().eq('id', orderId).maybeSingle();
     if (data == null) return null;
     return OrderModel.fromJson(data);
   }
 
   static String _randomAlphanumeric(int length) {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    return List.generate(
-        length, (_) => chars[Random().nextInt(chars.length)]).join();
+    return List.generate(length, (_) => chars[Random().nextInt(chars.length)])
+        .join();
   }
 }

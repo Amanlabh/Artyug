@@ -1,9 +1,12 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 import '../../core/config/app_config.dart';
 import '../../core/theme/app_colors.dart';
 
@@ -53,6 +56,8 @@ class CertificateModel {
         qrCode: m['qr_code'] ?? 'artyug://certificate/${m['id']}',
         isVerified: m['is_verified'] == true,
       );
+
+  bool get hasVerifiedProof => isVerified || _isRealSolanaTxHash(txHash);
 
   // Demo certificates
   static List<CertificateModel> get demoCerts => [
@@ -357,7 +362,7 @@ class _CertificateSquareTile extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            if (cert.isVerified) ...[
+                            if (cert.hasVerifiedProof) ...[
                               const SizedBox(width: 6),
                               Container(
                                 padding: const EdgeInsets.symmetric(
@@ -681,6 +686,46 @@ bool _isRealSolanaTxHash(String? hash) {
   return isBase58;
 }
 
+Future<void> _openUrlOrCopyFallback(BuildContext context, String url) async {
+  final uri = Uri.tryParse(url);
+  if (uri == null || (uri.scheme != 'https' && uri.scheme != 'http')) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Invalid explorer link')));
+    return;
+  }
+
+  try {
+    var ok = await launchUrl(
+      uri,
+      mode:
+          kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
+      webOnlyWindowName: '_blank',
+    );
+    if (!ok) {
+      ok = await launchUrl(
+        uri,
+        mode: LaunchMode.platformDefault,
+        webOnlyWindowName: '_blank',
+      );
+    }
+    if (!context.mounted) return;
+    if (!ok) {
+      await Clipboard.setData(ClipboardData(text: url));
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Could not open browser, so the link was copied'),
+      ));
+    }
+  } catch (_) {
+    await Clipboard.setData(ClipboardData(text: url));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('Could not open browser, so the link was copied'),
+    ));
+  }
+}
+
 class _CertificateCard2 extends StatelessWidget {
   final CertificateModel cert;
   const _CertificateCard2({required this.cert});
@@ -718,16 +763,16 @@ class _CertificateCard2 extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: cert.isVerified
+                  color: cert.hasVerifiedProof
                       ? const Color(0xFF16A34A)
                       : AppColors.textSecondary,
                   borderRadius: BorderRadius.circular(100),
                 ),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(cert.isVerified ? Icons.verified : Icons.pending,
+                  Icon(cert.hasVerifiedProof ? Icons.verified : Icons.pending,
                       size: 12, color: Colors.white),
                   const SizedBox(width: 4),
-                  Text(cert.isVerified ? 'VERIFIED' : 'PENDING',
+                  Text(cert.hasVerifiedProof ? 'VERIFIED' : 'PENDING',
                       style: const TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
@@ -934,18 +979,16 @@ class _BlockchainSection extends StatelessWidget {
                 width: double.infinity,
                 child: OutlinedButton.icon(
                   onPressed: () {
-                    final url = AppConfig.buildSolanaExplorerUrl(
+                    final url = AppConfig.buildSolscanUrl(
                       cert.txHash!,
                       mode: AppConfig.isDemoMode
                           ? ChainMode.devnet
                           : ChainMode.mainnet,
                     );
-                    Clipboard.setData(ClipboardData(text: url));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Explorer URL copied')));
+                    _openUrlOrCopyFallback(context, url);
                   },
                   icon: const Icon(Icons.open_in_new, size: 16),
-                  label: const Text('View on Solana Explorer'),
+                  label: const Text('View on Solscan'),
                   style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.primary,
                       side: const BorderSide(color: AppColors.primary)),

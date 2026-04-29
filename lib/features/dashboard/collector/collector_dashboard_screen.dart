@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -1835,10 +1836,20 @@ class _CertificateTile extends StatelessWidget {
                   ),
                   onPressed: () async {
                     final uri = Uri.parse(cert.solanaExplorerUrl!);
-                    final ok = await launchUrl(
+                    var ok = await launchUrl(
                       uri,
-                      mode: LaunchMode.externalApplication,
+                      mode: kIsWeb
+                          ? LaunchMode.platformDefault
+                          : LaunchMode.externalApplication,
+                      webOnlyWindowName: '_blank',
                     );
+                    if (!ok) {
+                      ok = await launchUrl(
+                        uri,
+                        mode: LaunchMode.platformDefault,
+                        webOnlyWindowName: '_blank',
+                      );
+                    }
                     if (!sheetContext.mounted) return;
                     if (!ok) {
                       await Clipboard.setData(
@@ -1848,7 +1859,7 @@ class _CertificateTile extends StatelessWidget {
                       ScaffoldMessenger.of(sheetContext).showSnackBar(
                         const SnackBar(
                           content: Text(
-                            'Could not open browser â€” link copied',
+                            'Could not open browser, link copied',
                           ),
                         ),
                       );

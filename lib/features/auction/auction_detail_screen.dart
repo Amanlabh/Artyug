@@ -202,8 +202,7 @@ class _AuctionDetailScreenState extends State<AuctionDetailScreen>
       return;
     }
     if (amt < auction.minimumNextBid) {
-      _showSnack(
-          'Minimum bid is ${_currency.format(auction.minimumNextBid)}');
+      _showSnack('Minimum bid is ${_currency.format(auction.minimumNextBid)}');
       return;
     }
 
@@ -248,7 +247,8 @@ class _AuctionDetailScreenState extends State<AuctionDetailScreen>
     if (_loading && _auction == null) {
       return const Scaffold(
         backgroundColor: AppColors.background,
-        body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+        body:
+            Center(child: CircularProgressIndicator(color: AppColors.primary)),
       );
     }
     if (_auction == null && _error != null) {
@@ -293,7 +293,8 @@ class _AuctionDetailScreenState extends State<AuctionDetailScreen>
     );
   }
 
-  Widget _buildWide(AuctionModel auction, painting, BoxConstraints constraints) {
+  Widget _buildWide(
+      AuctionModel auction, painting, BoxConstraints constraints) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -355,8 +356,8 @@ class _AuctionDetailScreenState extends State<AuctionDetailScreen>
             ),
           ),
           _squareBtn(Icons.share_rounded, onTap: () {
-            Clipboard.setData(ClipboardData(
-                text: 'artyug://auction/${widget.auctionId}'));
+            Clipboard.setData(
+                ClipboardData(text: 'artyug://auction/${widget.auctionId}'));
             _showSnack('Auction link copied');
           }),
         ],
@@ -430,8 +431,8 @@ class _AuctionDetailScreenState extends State<AuctionDetailScreen>
                 builder: (_, __) => Opacity(
                   opacity: ended ? 1.0 : _pulseAnim.value,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: ended
                           ? AppColors.surfaceVariant
@@ -457,7 +458,7 @@ class _AuctionDetailScreenState extends State<AuctionDetailScreen>
                         const SizedBox(width: 6),
                         Text(
                           ended
-                              ? 'Auction Ended'
+                              ? (_auction?.relativeEndLabel ?? 'Auction Ended')
                               : 'Ends in ${_formatDuration(r)}',
                           style: TextStyle(
                             color: ended
@@ -644,10 +645,7 @@ class _AuctionDetailScreenState extends State<AuctionDetailScreen>
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
-                  Container(
-                      width: 2,
-                      height: 14,
-                      color: AppColors.border),
+                  Container(width: 2, height: 14, color: AppColors.border),
                   const SizedBox(width: 8),
                   const Text('Starting Price',
                       style: TextStyle(
@@ -701,8 +699,8 @@ class _AuctionDetailScreenState extends State<AuctionDetailScreen>
                 ),
                 const Spacer(),
                 TextButton(
-                  onPressed: () => context
-                      .push('/artwork/${painting.id}', extra: painting),
+                  onPressed: () =>
+                      context.push('/artwork/${painting.id}', extra: painting),
                   child: const Text('Read More',
                       style: TextStyle(color: AppColors.primary, fontSize: 12)),
                 ),
@@ -889,12 +887,10 @@ class _BidRow extends StatelessWidget {
             child: Text(
               bid.bidderName ?? 'Anonymous',
               style: TextStyle(
-                color: isHighest
-                    ? AppColors.textPrimary
-                    : AppColors.textSecondary,
+                color:
+                    isHighest ? AppColors.textPrimary : AppColors.textSecondary,
                 fontSize: 13,
-                fontWeight:
-                    isHighest ? FontWeight.w700 : FontWeight.w500,
+                fontWeight: isHighest ? FontWeight.w700 : FontWeight.w500,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -905,9 +901,8 @@ class _BidRow extends StatelessWidget {
               Text(
                 currency.format(bid.amount),
                 style: TextStyle(
-                  color: isHighest
-                      ? AppColors.primary
-                      : AppColors.textSecondary,
+                  color:
+                      isHighest ? AppColors.primary : AppColors.textSecondary,
                   fontSize: 13,
                   fontWeight: FontWeight.w800,
                 ),
@@ -917,9 +912,7 @@ class _BidRow extends StatelessWidget {
                 width: 8,
                 height: 8,
                 decoration: BoxDecoration(
-                  color: isHighest
-                      ? AppColors.success
-                      : AppColors.border,
+                  color: isHighest ? AppColors.success : AppColors.border,
                   shape: BoxShape.circle,
                 ),
               ),

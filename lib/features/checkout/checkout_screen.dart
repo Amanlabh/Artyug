@@ -105,7 +105,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     if (!ok) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please fill in address line, city, postal code, and country.'),
+          content: Text(
+              'Please fill in address line, city, postal code, and country.'),
         ),
       );
     }
@@ -139,7 +140,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       if (painting.isSold) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('This artwork has already been sold and cannot be purchased again.'),
+            content: Text(
+                'This artwork has already been sold and cannot be purchased again.'),
           ),
         );
         return;
@@ -159,7 +161,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       }
       if (_selectedMethod == null && methods.isNotEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Choose a payment method (Dodo, Stripe, or Razorpay).')),
+          const SnackBar(
+              content:
+                  Text('Choose a payment method (Dodo, Stripe, or Razorpay).')),
         );
         return;
       }
@@ -243,12 +247,43 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           return;
         }
 
+        final razorpayOrderId = payResult.razorpayOrderId;
+        final razorpayPaymentId = payResult.razorpayPaymentId;
+        if (razorpayOrderId == null ||
+            razorpayOrderId.isEmpty ||
+            razorpayPaymentId == null ||
+            razorpayPaymentId.isEmpty) {
+          if (mounted) {
+            setState(() => _purchasing = false);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Payment succeeded, but Razorpay did not return a valid payment reference.',
+                ),
+              ),
+            );
+          }
+          return;
+        }
+
+        final liveOrder = await OrderRepository.createLiveOrder(
+          paintingId: painting.id,
+          razorpayOrderId: razorpayOrderId,
+          razorpayPaymentId: razorpayPaymentId,
+          amountPaid: payResult.amount,
+          currency: payResult.currency,
+        );
+
         if (mounted) {
-          setState(() {
-            _purchasing = false;
-            _awaitingWebhook = true;
-            _awaitingGateway = PaymentGateway.razorpay;
-          });
+          setState(() => _purchasing = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Payment successful for ${liveOrder.order.artworkTitle ?? 'your artwork'}.',
+              ),
+            ),
+          );
+          context.go('/orders');
         }
         return;
       }
@@ -383,9 +418,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             child: _awaitingWebhook
                 ? _buildAwaitingWebhook()
                 : _loading
-                    ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+                    ? const Center(
+                        child:
+                            CircularProgressIndicator(color: AppColors.primary))
                     : _error != null && _painting == null
-                        ? Center(child: Text(_error!, style: const TextStyle(color: AppColors.error)))
+                        ? Center(
+                            child: Text(_error!,
+                                style: const TextStyle(color: AppColors.error)))
                         : _buildContent(runtimeLive, methods),
           ),
           if (_purchasing && !runtimeLive)
@@ -441,8 +480,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                 runtimeLive,
                                 maxImageSide: 380,
                                 centerText: false,
-                                bottomError:
-                                    !runtimeLive && _error != null ? _error : null,
+                                bottomError: !runtimeLive && _error != null
+                                    ? _error
+                                    : null,
                               ),
                             ),
                           ),
@@ -490,10 +530,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           bottomError: null,
                         ),
                         const SizedBox(height: 28),
-                        if (runtimeLive) _checkoutFormColumn(runtimeLive, methods),
+                        if (runtimeLive)
+                          _checkoutFormColumn(runtimeLive, methods),
                         if (_error != null) ...[
                           const SizedBox(height: 16),
-                          Text(_error!, style: const TextStyle(color: AppColors.error)),
+                          Text(_error!,
+                              style: const TextStyle(color: AppColors.error)),
                         ],
                       ],
                     ),
@@ -598,7 +640,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
-  Widget _checkoutFormColumn(bool runtimeLive, List<CheckoutPaymentMethod> methods) {
+  Widget _checkoutFormColumn(
+      bool runtimeLive, List<CheckoutPaymentMethod> methods) {
     if (!runtimeLive) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -691,17 +734,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               SizedBox(height: 8),
               Text(
                 'Dodo Payments is running in test mode (sandbox). If the browser cannot be opened, the checkout link is copied to clipboard.',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.35),
+                style: TextStyle(
+                    color: AppColors.textSecondary, fontSize: 12, height: 1.35),
               ),
               SizedBox(height: 8),
               Text(
                 'Stripe is intentionally disabled for unsupported countries in this demo build.',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.35),
+                style: TextStyle(
+                    color: AppColors.textSecondary, fontSize: 12, height: 1.35),
               ),
               SizedBox(height: 8),
               Text(
                 'Arc Pay (stablecoin) is coming soon and will be enabled later.',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.35),
+                style: TextStyle(
+                    color: AppColors.textSecondary, fontSize: 12, height: 1.35),
               ),
             ],
           ),
@@ -838,7 +884,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.verified_user_outlined, color: AppColors.primary, size: 22),
+          const Icon(Icons.verified_user_outlined,
+              color: AppColors.primary, size: 22),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -894,7 +941,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       padding: EdgeInsets.fromLTRB(wide ? 28 : 20, 14, wide ? 32 : 20, 28),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.border.withValues(alpha: 0.9))),
+        border: Border(
+            top: BorderSide(color: AppColors.border.withValues(alpha: 0.9))),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.35),
@@ -948,14 +996,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           labelStyle: const TextStyle(color: AppColors.textSecondary),
           filled: true,
           fillColor: AppColors.surfaceHigh.withValues(alpha: 0.45),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: AppColors.border.withValues(alpha: 0.9)),
+            borderSide:
+                BorderSide(color: AppColors.border.withValues(alpha: 0.9)),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: AppColors.border.withValues(alpha: 0.75)),
+            borderSide:
+                BorderSide(color: AppColors.border.withValues(alpha: 0.75)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
@@ -1036,7 +1087,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         value: m,
         groupValue: _selectedMethod,
         onChanged: enabled ? (v) => setState(() => _selectedMethod = v) : null,
-        secondary: Icon(icon, color: enabled ? AppColors.textSecondary : AppColors.textTertiary),
+        secondary: Icon(icon,
+            color: enabled ? AppColors.textSecondary : AppColors.textTertiary),
         title: Text(
           title,
           style: const TextStyle(
@@ -1073,7 +1125,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.open_in_browser_outlined, color: AppColors.primary, size: 56),
+            const Icon(Icons.open_in_browser_outlined,
+                color: AppColors.primary, size: 56),
             const SizedBox(height: 20),
             Text(
               'Complete payment in browser',
@@ -1103,9 +1156,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.primary,
                   side: const BorderSide(color: AppColors.primary),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
-                child: const Text('Go to My Orders', style: TextStyle(fontWeight: FontWeight.w700)),
+                child: const Text('Go to My Orders',
+                    style: TextStyle(fontWeight: FontWeight.w700)),
               ),
             ),
             const SizedBox(height: 12),
@@ -1114,7 +1169,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 _awaitingWebhook = false;
                 _awaitingGateway = null;
               }),
-              child: const Text('Back to checkout', style: TextStyle(color: AppColors.textSecondary)),
+              child: const Text('Back to checkout',
+                  style: TextStyle(color: AppColors.textSecondary)),
             ),
           ],
         ),
@@ -1154,7 +1210,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
-  Widget _buildInfoRow(String label, String value, {bool emphasizeValue = false}) {
+  Widget _buildInfoRow(String label, String value,
+      {bool emphasizeValue = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
@@ -1248,12 +1305,14 @@ class _DemoPayingOverlayState extends State<_DemoPayingOverlay>
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(28),
                       border: Border.all(
-                        color: AppColors.primary.withValues(alpha: 0.22 + 0.28 * _glow.value),
+                        color: AppColors.primary
+                            .withValues(alpha: 0.22 + 0.28 * _glow.value),
                         width: 1.5,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.12 + 0.22 * _glow.value),
+                          color: AppColors.primary
+                              .withValues(alpha: 0.12 + 0.22 * _glow.value),
                           blurRadius: 36 + 12 * _glow.value,
                           spreadRadius: 1,
                         ),
@@ -1277,7 +1336,8 @@ class _DemoPayingOverlayState extends State<_DemoPayingOverlay>
                     children: [
                       ScaleTransition(
                         scale: Tween<double>(begin: 0.9, end: 1.06).animate(
-                          CurvedAnimation(parent: _pulse, curve: Curves.easeInOutCubic),
+                          CurvedAnimation(
+                              parent: _pulse, curve: Curves.easeInOutCubic),
                         ),
                         child: Container(
                           width: 92,
@@ -1329,7 +1389,8 @@ class _DemoPayingOverlayState extends State<_DemoPayingOverlay>
                         style: TextStyle(
                           fontSize: 14,
                           height: 1.5,
-                          color: AppColors.textSecondary.withValues(alpha: 0.94),
+                          color:
+                              AppColors.textSecondary.withValues(alpha: 0.94),
                         ),
                       ),
                       const SizedBox(height: 28),
@@ -1339,7 +1400,8 @@ class _DemoPayingOverlayState extends State<_DemoPayingOverlay>
                           width: double.infinity,
                           height: 3,
                           child: LinearProgressIndicator(
-                            backgroundColor: AppColors.border.withValues(alpha: 0.45),
+                            backgroundColor:
+                                AppColors.border.withValues(alpha: 0.45),
                             color: AppColors.primary,
                             minHeight: 3,
                           ),
