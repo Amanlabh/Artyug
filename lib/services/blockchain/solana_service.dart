@@ -142,10 +142,14 @@ class SolanaService {
       txSig ??= await _sendTransaction(rpcUrl, signedTx, skipPreflight: true);
       if (txSig == null) return null;
 
-      // mainnet = no cluster param (Solscan default); devnet = ?cluster=devnet
-      final clusterParam =
-          AppConfig.chainMode == ChainMode.devnet ? '?cluster=devnet' : '';
-      final explorerUrl = 'https://solscan.io/tx/$txSig$clusterParam';
+      final landed = await _waitForSignature(rpcUrl, txSig);
+      if (!landed) {
+        debugPrint('[Solana] Signature returned but transaction never landed: $txSig');
+        return null;
+      }
+
+      final explorerUrl =
+          AppConfig.buildSolscanUrl(txSig, mode: AppConfig.chainMode);
       debugPrint('[Solana] Attested tx=$txSig solscan=$explorerUrl');
       return SolanaAttestationResult(
         signatureBase58: txSig,
@@ -297,6 +301,46 @@ class SolanaService {
       debugPrint('[Solana] sendTransaction network error: $e\n$st');
       return null;
     }
+  }
+
+  static Future<bool> _waitForSignature(String rpcUrl, String signature) async {
+    for (var attempt = 0; attempt < 8; attempt++) {
+      try {
+        final resp = await http.post(
+          Uri.parse(rpcUrl),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'jsonrpc': '2.0',
+            'id': 1,
+            'method': 'getSignatureStatuses',
+            'params': [
+              [signature],
+              {'searchTransactionHistory': true}
+            ],
+          }),
+        );
+        if (resp.statusCode == 200) {
+          final body = jsonDecode(resp.body) as Map<String, dynamic>;
+          final values = body['result']?['value'] as List<dynamic>?;
+          final status = values != null && values.isNotEmpty
+              ? values.first as Map<String, dynamic>?
+              : null;
+          final confirmation = status?['confirmationStatus'] as String?;
+          final err = status?['err'];
+          if (err != null) {
+            debugPrint('[Solana] Signature failed on-chain: $err');
+            return false;
+          }
+          if (confirmation == 'confirmed' || confirmation == 'finalized') {
+            return true;
+          }
+        }
+      } catch (e, st) {
+        debugPrint('[Solana] getSignatureStatuses failed: $e\n$st');
+      }
+      await Future<void>.delayed(const Duration(seconds: 2));
+    }
+    return false;
   }
 
   // ─── Transaction builder ─────────────────────────────────────────────────────

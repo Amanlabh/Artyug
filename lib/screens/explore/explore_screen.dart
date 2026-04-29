@@ -72,7 +72,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
       final rawPaintings = await _supabase
           .from('paintings')
           .select(
-              'id, artist_id, title, image_url, price, is_for_sale, is_sold, category')
+              'id, artist_id, title, description, image_url, price, is_for_sale, is_sold, category, medium, dimensions, additional_images')
           .order('created_at', ascending: false)
           .limit(30);
 
@@ -594,7 +594,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                               crossAxisCount: 2,
                               crossAxisSpacing: 10,
                               mainAxisSpacing: 10,
-                              childAspectRatio: 0.75,
+                              childAspectRatio: 0.54,
                             ),
                           ),
                         ),
@@ -892,21 +892,41 @@ class _ArtistRow extends StatelessWidget {
 }
 
 // ─── Artwork Card ─────────────────────────────────────────────────────────────
-class _ArtworkCard extends StatelessWidget {
+class _ArtworkCard extends StatefulWidget {
   final Map<String, dynamic> painting;
   const _ArtworkCard({required this.painting});
 
   @override
+  State<_ArtworkCard> createState() => _ArtworkCardState();
+}
+
+class _ArtworkCardState extends State<_ArtworkCard> {
+  bool _expanded = false;
+
+  @override
   Widget build(BuildContext context) {
+    final painting = widget.painting;
     final profile = painting['profiles'] as Map<String, dynamic>? ?? {};
     final artistName =
         profile['display_name'] ?? profile['username'] ?? 'Artist';
     final imageUrl = _explorePaintingImageUrl(painting);
     final title = painting['title'] as String? ?? 'Untitled';
+    final description = (painting['description'] as String? ?? '').trim();
+    final medium = (painting['medium'] as String? ?? '').trim();
+    final dimensions = (painting['dimensions'] as String? ?? '').trim();
     final price = painting['price'] ?? painting['price_inr'];
     final available =
         (painting['is_for_sale'] == true || painting['is_available'] == true) &&
             painting['is_sold'] != true;
+    final details = [
+      if (medium.isNotEmpty) medium,
+      if (dimensions.isNotEmpty) dimensions,
+    ].join('  |  ');
+    final priceLabel = _formatPrice(price);
+    final showReadMore = description.length > 72;
+    final visibleDescription = _expanded || !showReadMore
+        ? description
+        : '${description.substring(0, 72).trimRight()}...';
 
     return GestureDetector(
       onTap: () => context.push('/artwork/${painting['id']}'),
@@ -920,8 +940,8 @@ class _ArtworkCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image
-            Expanded(
+            AspectRatio(
+              aspectRatio: 1.12,
               child: imageUrl != null
                   ? CachedNetworkImage(
                       imageUrl: imageUrl,
@@ -932,66 +952,153 @@ class _ArtworkCard extends StatelessWidget {
                       errorWidget: (_, __, ___) => Container(
                         color: AppColors.surfaceMutedOf(context),
                         child: Center(
-                            child: Icon(Icons.palette_outlined,
-                                color: AppColors.textTertiaryOf(context))),
+                          child: Icon(
+                            Icons.palette_outlined,
+                            color: AppColors.textTertiaryOf(context),
+                          ),
+                        ),
                       ),
                     )
                   : Container(
                       color: AppColors.surfaceMutedOf(context),
                       child: Center(
-                          child: Icon(Icons.palette_outlined,
-                              color: AppColors.textTertiaryOf(context),
-                              size: 32)),
+                        child: Icon(
+                          Icons.palette_outlined,
+                          color: AppColors.textTertiaryOf(context),
+                          size: 32,
+                        ),
+                      ),
                     ),
             ),
-
-            // Info
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          color: AppColors.textPrimaryOf(context),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 2),
-                  Text(artistName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          color: AppColors.textSecondaryOf(context),
-                          fontSize: 11)),
-                  if (available && price != null) ...[
-                    const SizedBox(height: 6),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('₹$price',
+                        Expanded(
+                          child: Text(
+                            priceLabel,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                                color: AppColors.primary,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w800)),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary,
-                            borderRadius: BorderRadius.circular(100),
+                              color: AppColors.textPrimary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
-                          child: const Text('Buy',
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700)),
+                        ),
+                        _ActionIcon(
+                          icon: Icons.favorite_border_rounded,
+                          onTap: () {},
+                        ),
+                        const SizedBox(width: 6),
+                        _ActionIcon(
+                          icon: Icons.add_shopping_cart_outlined,
+                          onTap: () {
+                            if (available) {
+                              context.push('/checkout/${painting['id']}');
+                            }
+                          },
                         ),
                       ],
                     ),
+                    const SizedBox(height: 6),
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.textPrimaryOf(context),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        height: 1.25,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      artistName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.textSecondaryOf(context),
+                        fontSize: 11.5,
+                      ),
+                    ),
+                    if (details.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        details,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: AppColors.textTertiaryOf(context),
+                          fontSize: 10.8,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                    if (description.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        visibleDescription,
+                        maxLines: _expanded ? 5 : 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: AppColors.textSecondaryOf(context),
+                          fontSize: 11,
+                          height: 1.4,
+                        ),
+                      ),
+                      if (showReadMore)
+                        GestureDetector(
+                          onTap: () => setState(() => _expanded = !_expanded),
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              _expanded ? 'Read less' : 'Read more',
+                              style: const TextStyle(
+                                color: AppColors.primary,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                    const Spacer(),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: available
+                            ? () => context.push('/checkout/${painting['id']}')
+                            : () => context.push('/artwork/${painting['id']}'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: available
+                              ? AppColors.primary
+                              : AppColors.surfaceMutedOf(context),
+                          foregroundColor: available
+                              ? Colors.white
+                              : AppColors.textSecondaryOf(context),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: Text(
+                          available ? 'Buy now' : 'View artwork',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
-                ],
+                ),
               ),
             ),
           ],
@@ -999,9 +1106,49 @@ class _ArtworkCard extends StatelessWidget {
       ),
     );
   }
+
+  String _formatPrice(dynamic raw) {
+    if (raw == null) return 'Price on request';
+    if (raw is int) return 'Rs $raw';
+    if (raw is double) {
+      if (raw == raw.roundToDouble()) return 'Rs ${raw.toInt()}';
+      return 'Rs ${raw.toStringAsFixed(0)}';
+    }
+    return 'Rs $raw';
+  }
 }
 
+class _ActionIcon extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
 
+  const _ActionIcon({
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: AppColors.surfaceMutedOf(context),
+          shape: BoxShape.circle,
+          border: Border.all(color: AppColors.borderOf(context)),
+        ),
+        child: Icon(
+          icon,
+          size: 17,
+          color: AppColors.textPrimaryOf(context),
+        ),
+      ),
+    );
+  }
+}
 
 class _ExploreQuickActions extends StatelessWidget {
   final bool embedInShell;
@@ -1109,4 +1256,5 @@ class _ExploreMarketplaceHero extends StatelessWidget {
     );
   }
 }
+
 

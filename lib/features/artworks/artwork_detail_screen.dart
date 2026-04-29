@@ -29,6 +29,8 @@ class ArtworkDetailScreen extends StatefulWidget {
   State<ArtworkDetailScreen> createState() => _ArtworkDetailScreenState();
 }
 
+enum _ArtworkInfoTab { about, provenance }
+
 class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
   PaintingModel? _painting;
   bool _loading = true;
@@ -37,6 +39,8 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
   int _likesCount = 0;
   bool _likeBusy = false;
   bool _descExpanded = false;
+  int _selectedMediaIndex = 0;
+  _ArtworkInfoTab _infoTab = _ArtworkInfoTab.about;
 
   @override
   void initState() {
@@ -104,6 +108,19 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
     }
   }
 
+  List<String> _galleryImages(PaintingModel painting) {
+    final urls = <String>[];
+    final primary = painting.resolvedImageUrl.trim();
+    if (primary.isNotEmpty) urls.add(primary);
+    for (final raw in painting.additionalImages ?? const <String>[]) {
+      final cleaned = raw.trim();
+      if (cleaned.isNotEmpty && !urls.contains(cleaned)) {
+        urls.add(cleaned);
+      }
+    }
+    return urls;
+  }
+
   @override
   Widget build(BuildContext context) {
     final painting = _painting;
@@ -113,6 +130,11 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
     if (painting == null) {
       return _buildError();
     }
+    final galleryImages = _galleryImages(painting);
+    final selectedIndex = _selectedMediaIndex.clamp(
+      0,
+      galleryImages.isEmpty ? 0 : galleryImages.length - 1,
+    );
 
     return Scaffold(
       backgroundColor: AppColors.canvasOf(context),
@@ -139,34 +161,47 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                       children: [
                         Expanded(
                           flex: 6,
-                          child: _MediaColumn(painting: painting),
+                          child: _MediaColumn(
+                            painting: painting,
+                            galleryImages: galleryImages,
+                            selectedIndex: selectedIndex,
+                            onSelectImage: (index) =>
+                                setState(() => _selectedMediaIndex = index),
+                          ),
                         ),
                         const SizedBox(width: 24),
                         Expanded(
                           flex: 5,
                           child: _DetailColumn(
                             painting: painting,
-                            isLiked: _isLiked,
                             likesCount: _likesCount,
-                            descExpanded: _descExpanded,
-                            onToggleDescription: () =>
-                                setState(() => _descExpanded = !_descExpanded),
                           ),
                         ),
                       ],
                     )
                   else ...[
-                    _MediaColumn(painting: painting),
+                    _MediaColumn(
+                      painting: painting,
+                      galleryImages: galleryImages,
+                      selectedIndex: selectedIndex,
+                      onSelectImage: (index) =>
+                          setState(() => _selectedMediaIndex = index),
+                    ),
                     const SizedBox(height: 18),
                     _DetailColumn(
                       painting: painting,
-                      isLiked: _isLiked,
                       likesCount: _likesCount,
-                      descExpanded: _descExpanded,
-                      onToggleDescription: () =>
-                          setState(() => _descExpanded = !_descExpanded),
                     ),
                   ],
+                  const SizedBox(height: 18),
+                  _DescriptionPanel(
+                    painting: painting,
+                    expanded: _descExpanded,
+                    activeTab: _infoTab,
+                    onTabChanged: (tab) => setState(() => _infoTab = tab),
+                    onToggle: () =>
+                        setState(() => _descExpanded = !_descExpanded),
+                  ),
                 ],
               ),
             );
@@ -306,55 +341,110 @@ class _DetailTopBar extends StatelessWidget {
 
 class _MediaColumn extends StatelessWidget {
   final PaintingModel painting;
+  final List<String> galleryImages;
+  final int selectedIndex;
+  final ValueChanged<int> onSelectImage;
 
-  const _MediaColumn({required this.painting});
+  const _MediaColumn({
+    required this.painting,
+    required this.galleryImages,
+    required this.selectedIndex,
+    required this.onSelectImage,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final currentImage = galleryImages.isEmpty
+        ? painting.resolvedImageUrl
+        : galleryImages[selectedIndex];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(22),
             border: Border.all(color: AppColors.borderStrongOf(context)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.26),
-                blurRadius: 24,
-                offset: const Offset(0, 14),
+                color: AppColors.shadowOf(context, alpha: 0.18),
+                blurRadius: 30,
+                offset: const Offset(0, 16),
               ),
             ],
           ),
-          child: MarketplaceMediaFrame(
-            imageUrl: painting.resolvedImageUrl,
-            aspectRatio: 1,
-            borderRadius: BorderRadius.circular(20),
-          ),
-
-        ),
-        const SizedBox(height: 14),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceOf(context),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.borderOf(context)),
-          ),
-          child: Row(
+          child: Column(
             children: [
-              Icon(Icons.security_rounded, color: AppColors.success, size: 18),
-              SizedBox(width: 8),
-              Expanded(
+              MarketplaceMediaFrame(
+                imageUrl: currentImage,
+                aspectRatio: 1.04,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(22),
+                ),
+              ),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceMutedOf(context),
+                  borderRadius: const BorderRadius.vertical(
+                    bottom: Radius.circular(22),
+                  ),
+                ),
                 child: Text(
-                  'Authenticity-ready media with QR and NFC certificate pathways.',
-                  style:
-                      TextStyle(color: AppColors.textSecondaryOf(context), fontSize: 12),
+                  'Preview your collectible with certificate-ready media and gallery framing.',
+                  style: TextStyle(
+                    color: AppColors.textSecondaryOf(context),
+                    fontSize: 12,
+                    height: 1.45,
+                  ),
                 ),
               ),
             ],
           ),
         ),
+        if (galleryImages.length > 1) ...[
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 92,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: galleryImages.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              itemBuilder: (context, index) {
+                final active = index == selectedIndex;
+                return InkWell(
+                  onTap: () => onSelectImage(index),
+                  borderRadius: BorderRadius.circular(14),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    width: 92,
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      color: active
+                          ? AppColors.primary.withValues(alpha: 0.14)
+                          : AppColors.surfaceOf(context),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: active
+                            ? AppColors.primary
+                            : AppColors.borderOf(context),
+                      ),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: MarketplaceMediaFrame(
+                        imageUrl: galleryImages[index],
+                        aspectRatio: 1,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -362,17 +452,11 @@ class _MediaColumn extends StatelessWidget {
 
 class _DetailColumn extends StatelessWidget {
   final PaintingModel painting;
-  final bool isLiked;
   final int likesCount;
-  final bool descExpanded;
-  final VoidCallback onToggleDescription;
 
   const _DetailColumn({
     required this.painting,
-    required this.isLiked,
     required this.likesCount,
-    required this.descExpanded,
-    required this.onToggleDescription,
   });
 
   @override
@@ -393,15 +477,13 @@ class _DetailColumn extends StatelessWidget {
         const SizedBox(height: 10),
         _ArtistIdentityCard(painting: painting),
         const SizedBox(height: 14),
-        _InfoChips(painting: painting, likesCount: likesCount),
+        _PriceHero(painting: painting),
+        const SizedBox(height: 16),
+        _VariantSection(painting: painting),
         const SizedBox(height: 16),
         _ActionZone(painting: painting),
         const SizedBox(height: 18),
-        _DescriptionPanel(
-          description: painting.description,
-          expanded: descExpanded,
-          onToggle: onToggleDescription,
-        ),
+        _TrustRow(painting: painting),
         if (painting.styleTags != null && painting.styleTags!.isNotEmpty) ...[
           const SizedBox(height: 14),
           Wrap(
@@ -432,7 +514,7 @@ class _DetailColumn extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 18),
-        _ProvenanceCard(painting: painting),
+        _InfoChips(painting: painting, likesCount: likesCount),
       ],
     );
   }
@@ -504,6 +586,170 @@ class _ArtistIdentityCard extends StatelessWidget {
             Icon(Icons.chevron_right_rounded,
                 color: AppColors.textTertiaryOf(context)),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PriceHero extends StatelessWidget {
+  final PaintingModel painting;
+
+  const _PriceHero({required this.painting});
+
+  @override
+  Widget build(BuildContext context) {
+    final price = painting.price;
+    final compareAt = price != null ? price * 1.3 : null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Sold by ${painting.artistDisplayName ?? 'Artyug creator'}',
+          style: TextStyle(
+            color: AppColors.textSecondaryOf(context),
+            fontSize: 12,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            if (compareAt != null)
+              Text(
+                'Rs. ${compareAt.toStringAsFixed(0)}',
+                style: TextStyle(
+                  color: AppColors.textTertiaryOf(context),
+                  fontSize: 18,
+                  decoration: TextDecoration.lineThrough,
+                ),
+              ),
+            if (compareAt != null) const SizedBox(width: 10),
+            Text(
+              painting.displayPrice.replaceAll('â‚¹', 'Rs. '),
+              style: const TextStyle(
+                color: AppColors.primary,
+                fontSize: 30,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.8,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _VariantSection extends StatelessWidget {
+  final PaintingModel painting;
+
+  const _VariantSection({required this.painting});
+
+  @override
+  Widget build(BuildContext context) {
+    final sizeOptions = <String>[
+      if (painting.sizeText != null && painting.sizeText!.trim().isNotEmpty)
+        painting.sizeText!.trim(),
+      if (painting.dimensions != null && painting.dimensions!.trim().isNotEmpty)
+        painting.dimensions!.trim(),
+      'Ready to hang',
+    ].toSet().toList();
+
+    const frameOptions = <String>[
+      'Wrapped Canvas',
+      'Golden Frame',
+      'Black Frame',
+    ];
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceOf(context),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.borderOf(context)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _VariantLabel('Size'),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (var i = 0; i < sizeOptions.length; i++)
+                _OptionChip(
+                  label: sizeOptions[i],
+                  active: i == 0,
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _VariantLabel('Frame'),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (var i = 0; i < frameOptions.length; i++)
+                _OptionChip(
+                  label: frameOptions[i],
+                  active: i == 0,
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VariantLabel extends StatelessWidget {
+  final String label;
+
+  const _VariantLabel(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label.toUpperCase(),
+      style: TextStyle(
+        color: AppColors.textTertiaryOf(context),
+        fontSize: 11,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 1.4,
+      ),
+    );
+  }
+}
+
+class _OptionChip extends StatelessWidget {
+  final String label;
+  final bool active;
+
+  const _OptionChip({
+    required this.label,
+    required this.active,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: active ? AppColors.textPrimaryOf(context) : AppColors.surfaceOf(context),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: active ? AppColors.textPrimaryOf(context) : AppColors.borderOf(context),
+        ),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: active ? AppColors.surfaceOf(context) : AppColors.textSecondaryOf(context),
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -585,34 +831,71 @@ class _ActionZone extends StatelessWidget {
         children: [
           Row(
             children: [
+              Container(
+                height: 42,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: AppColors.borderStrongOf(context)),
+                ),
+                child: Row(
+                  children: const [
+                    Icon(Icons.remove, size: 16),
+                    SizedBox(width: 18),
+                    Text('1', style: TextStyle(fontWeight: FontWeight.w700)),
+                    SizedBox(width: 18),
+                    Icon(Icons.add, size: 16),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
               Expanded(
-                child: listingType == 'auction'
-                    ? ElevatedButton.icon(
-                        onPressed: () => _openAuction(context),
-                        icon: Icon(Icons.gavel_rounded, size: 18),
-                        label: const Text('Place Bid'),
-                      )
-                    : painting.isAvailable
-                        ? ElevatedButton.icon(
-                            onPressed: () => _openBuyIntent(context),
-                            icon: Icon(Icons.shopping_bag_rounded, size: 18),
-                            label: Text('Buy for ${painting.displayPrice}'),
-                          )
-                        : OutlinedButton.icon(
-                            onPressed: null,
-                            icon: Icon(Icons.block_rounded, size: 18),
-                            label: Text(painting.isSold ? 'Sold' : 'Not listed'),
-                          ),
+                child: FilledButton(
+                  onPressed: painting.isAvailable ? () => _openBuyIntent(context) : null,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFB99874),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: Text(
+                    listingType == 'auction' ? 'ADD BID' : 'ADD TO CART',
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: listingType == 'auction'
+                  ? () => _openAuction(context)
+                  : painting.isAvailable
+                      ? () => _openBuyIntent(context)
+                      : null,
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.black,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+              ),
+              child: Text(
+                listingType == 'auction'
+                    ? 'PLACE BID'
+                    : painting.isAvailable
+                        ? 'BUY IT NOW'
+                        : (painting.isSold ? 'SOLD' : 'NOT LISTED'),
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () => context.push('/authenticity-center'),
-                  icon: Icon(Icons.verified_user_rounded, size: 18),
+                  icon: const Icon(Icons.verified_user_rounded, size: 18),
                   label: const Text('Verify'),
                 ),
               ),
@@ -621,12 +904,14 @@ class _ActionZone extends StatelessWidget {
                 child: OutlinedButton.icon(
                   onPressed: () async {
                     await Clipboard.setData(
-                        ClipboardData(text: 'artyug://artwork/${painting.id}'));
+                      ClipboardData(text: 'artyug://artwork/${painting.id}'),
+                    );
                     if (!context.mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Artwork link copied')));
+                      const SnackBar(content: Text('Artwork link copied')),
+                    );
                   },
-                  icon: Icon(Icons.share_rounded, size: 18),
+                  icon: const Icon(Icons.share_rounded, size: 18),
                   label: const Text('Share'),
                 ),
               ),
@@ -781,52 +1066,320 @@ class _ActionZone extends StatelessWidget {
   }
 }
 
-class _DescriptionPanel extends StatelessWidget {
-  final String? description;
-  final bool expanded;
-  final VoidCallback onToggle;
+class _TrustRow extends StatelessWidget {
+  final PaintingModel painting;
 
-  const _DescriptionPanel(
-      {required this.description,
-      required this.expanded,
-      required this.onToggle});
+  const _TrustRow({required this.painting});
 
   @override
   Widget build(BuildContext context) {
-    if (description == null || description!.trim().isEmpty) {
-      return const SizedBox.shrink();
-    }
+    final items = [
+      const _TrustTile(
+        icon: Icons.local_shipping_outlined,
+        title: 'Free Delivery',
+        subtitle: 'Pan-India dispatch',
+      ),
+      const _TrustTile(
+        icon: Icons.lock_outline_rounded,
+        title: 'Secure Payments',
+        subtitle: 'Protected checkout',
+      ),
+      const _TrustTile(
+        icon: Icons.token_rounded,
+        title: 'Solana-backed',
+        subtitle: 'Certificate ready',
+      ),
+    ];
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 640) {
+          return Column(
+            children: [
+              for (var i = 0; i < items.length; i++) ...[
+                if (i > 0) const SizedBox(height: 10),
+                items[i],
+              ],
+            ],
+          );
+        }
+        return Row(
+          children: [
+            for (var i = 0; i < items.length; i++) ...[
+              if (i > 0) const SizedBox(width: 10),
+              Expanded(child: items[i]),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
 
+class _TrustTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _TrustTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.surfaceOf(context),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.borderOf(context)),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('About this artwork',
-              style: TextStyle(
-                  color: AppColors.textPrimaryOf(context),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800)),
+          Icon(icon, color: AppColors.textPrimaryOf(context), size: 24),
           const SizedBox(height: 8),
           Text(
-            description!,
-            maxLines: expanded ? null : 4,
-            overflow: expanded ? TextOverflow.visible : TextOverflow.ellipsis,
+            title,
+            textAlign: TextAlign.center,
             style: TextStyle(
-                color: AppColors.textSecondaryOf(context), fontSize: 13, height: 1.55),
+              color: AppColors.textPrimaryOf(context),
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-          const SizedBox(height: 8),
-          TextButton(
-              onPressed: onToggle,
-              child: Text(expanded ? 'Show less' : 'Read more')),
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: AppColors.textSecondaryOf(context),
+              fontSize: 10.5,
+              height: 1.35,
+            ),
+          ),
         ],
       ),
+    );
+  }
+}
+
+class _DescriptionPanel extends StatelessWidget {
+  final PaintingModel painting;
+  final bool expanded;
+  final _ArtworkInfoTab activeTab;
+  final ValueChanged<_ArtworkInfoTab> onTabChanged;
+  final VoidCallback onToggle;
+
+  const _DescriptionPanel({
+    required this.painting,
+    required this.expanded,
+    required this.activeTab,
+    required this.onTabChanged,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final description = painting.description?.trim();
+    final hasDescription = description != null && description.isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            _InfoTabButton(
+              label: 'About the work',
+              active: activeTab == _ArtworkInfoTab.about,
+              onTap: () => onTabChanged(_ArtworkInfoTab.about),
+            ),
+            const SizedBox(width: 10),
+            _InfoTabButton(
+              label: 'Provenance',
+              active: activeTab == _ArtworkInfoTab.provenance,
+              onTap: () => onTabChanged(_ArtworkInfoTab.provenance),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: AppColors.surfaceOf(context),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.borderOf(context)),
+          ),
+          child: activeTab == _ArtworkInfoTab.about
+              ? _AboutWorkPanel(
+                  painting: painting,
+                  description: description,
+                  hasDescription: hasDescription,
+                  expanded: expanded,
+                  onToggle: onToggle,
+                )
+              : _ProvenanceCard(painting: painting),
+        ),
+      ],
+    );
+  }
+}
+
+class _InfoTabButton extends StatelessWidget {
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _InfoTabButton({
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: active ? AppColors.textPrimaryOf(context) : Colors.transparent,
+              width: 2,
+            ),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: active
+                ? AppColors.textPrimaryOf(context)
+                : AppColors.textSecondaryOf(context),
+            fontSize: 15,
+            fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AboutWorkPanel extends StatelessWidget {
+  final PaintingModel painting;
+  final String? description;
+  final bool hasDescription;
+  final bool expanded;
+  final VoidCallback onToggle;
+
+  const _AboutWorkPanel({
+    required this.painting,
+    required this.description,
+    required this.hasDescription,
+    required this.expanded,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final framedSize = painting.sizeText?.trim();
+    final medium = painting.medium?.trim();
+    final dimensions = painting.dimensions?.trim();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                hasDescription
+                    ? description!
+                    : 'This artwork is presented as a collectible work ready for display, ownership transfer, and certificate-backed verification.',
+                maxLines: expanded ? null : 5,
+                overflow:
+                    expanded ? TextOverflow.visible : TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppColors.textPrimaryOf(context),
+                  fontSize: 15,
+                  height: 1.75,
+                  fontStyle: hasDescription ? FontStyle.italic : FontStyle.normal,
+                ),
+              ),
+              if (hasDescription) ...[
+                const SizedBox(height: 14),
+                Text(
+                  painting.isVerifiedArtwork
+                      ? 'This work is supported by Artyug authenticity tracking and can be referenced through its verification record.'
+                      : 'The work includes marketplace-ready details so collectors can review medium, size, and condition before purchase.',
+                  style: TextStyle(
+                    color: AppColors.textSecondaryOf(context),
+                    fontSize: 14,
+                    height: 1.65,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: onToggle,
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 0),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: Text(expanded ? 'Show less' : 'Read more'),
+              ),
+            ],
+          ),
+        ),
+        Divider(height: 1, color: AppColors.borderOf(context)),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+          child: Column(
+            children: [
+              _LineRow(label: 'Materials', value: medium ?? 'Canvas-ready artwork'),
+              _LineRow(
+                label: 'Size',
+                value: dimensions ?? painting.sizeText ?? 'Open edition sizing',
+              ),
+              if (framedSize != null && framedSize.isNotEmpty)
+                _LineRow(label: 'Framed size', value: framedSize),
+              _LineRow(
+                label: 'Rarity',
+                value: painting.listingType?.trim().isNotEmpty == true
+                    ? painting.listingType!
+                    : 'Unique',
+              ),
+              _LineRow(
+                label: 'Medium',
+                value: medium ?? painting.category ?? 'Collectible artwork',
+              ),
+              _LineRow(
+                label: 'Condition',
+                value: painting.isSold
+                    ? 'Previously collected work in archived sale condition.'
+                    : 'Ready to hang and prepared for collector delivery.',
+              ),
+              _LineRow(
+                label: 'Signature',
+                value: painting.isVerifiedArtwork
+                    ? 'Backed by Artyug verification and artist record.'
+                    : 'Artist signature details available on request.',
+              ),
+              _LineRow(
+                label: 'Certificate of authenticity',
+                value: painting.solanaTxId?.isNotEmpty == true
+                    ? 'Included with Solana-backed certificate support.'
+                    : 'Included through Artyug authenticity center.',
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -838,23 +1391,17 @@ class _ProvenanceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceOf(context),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.borderOf(context)),
-      ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Provenance & Authenticity',
               style: TextStyle(
                   color: AppColors.textPrimaryOf(context),
-                  fontSize: 14,
+                  fontSize: 15,
                   fontWeight: FontWeight.w800)),
-          const SizedBox(height: 10),
+          const SizedBox(height: 14),
           _LineRow(
               label: 'Artwork ID',
               value: painting.id.substring(0, 8).toUpperCase()),
@@ -891,25 +1438,32 @@ class _LineRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: AppColors.borderOf(context)),
+        ),
+      ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 110,
+            width: 170,
             child: Text(label,
                 style: TextStyle(
-                    color: AppColors.textTertiaryOf(context),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600)),
+                    color: AppColors.textPrimaryOf(context),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700)),
           ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(value,
                 style: TextStyle(
                     color: AppColors.textSecondaryOf(context),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600)),
+                    fontSize: 13,
+                    height: 1.55,
+                    fontWeight: FontWeight.w500)),
           ),
         ],
       ),

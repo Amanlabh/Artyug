@@ -1,6 +1,4 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
@@ -34,6 +32,14 @@ class _PaintingCardState extends State<PaintingCard> {
   @override
   Widget build(BuildContext context) {
     final painting = widget.painting;
+    final specs = <String>[
+      if (painting.medium != null && painting.medium!.trim().isNotEmpty)
+        painting.medium!.trim(),
+      if (painting.dimensions != null && painting.dimensions!.trim().isNotEmpty)
+        painting.dimensions!.trim(),
+      if (painting.category != null && painting.category!.trim().isNotEmpty)
+        'on ${painting.category!.trim()}',
+    ].join(', ');
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
@@ -62,332 +68,66 @@ class _PaintingCardState extends State<PaintingCard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Stack(
-                children: [
-                  MarketplaceMediaFrame(
-                    imageUrl: painting.resolvedImageUrl,
-                    aspectRatio: 4 / 3,
-                    borderRadius: BorderRadius.zero,
-                  ),
-                  Positioned(
-                    top: 10,
-                    left: 10,
-                    child: _CreatorPill(
-                      name: painting.artistDisplayName ?? 'Artyug Artist',
-                      verified: painting.artistIsVerified ?? false,
-                      avatarUrl: painting.resolvedArtistAvatarUrl,
-                    ),
-                  ),
-                  Positioned(
-                    top: 10,
-                    right: 10,
-                    child: _StatusPill(
-                      label: painting.isBoosted
-                          ? 'FEATURED'
-                          : (painting.category ?? 'COLLECTIBLE').toUpperCase(),
-                      color: painting.isBoosted
-                          ? AppColors.primary
-                          : AppColors.info,
-                    ),
-                  ),
-                  if (painting.price != null)
-                    Positioned(
-                      bottom: 10,
-                      right: 10,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.66),
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(color: Colors.white12),
-                        ),
-                        child: Text(
-                          painting.displayPrice,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
+              MarketplaceMediaFrame(
+                imageUrl: painting.resolvedImageUrl,
+                aspectRatio: 1,
+                borderRadius: BorderRadius.zero,
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+                padding: const EdgeInsets.fromLTRB(0, 12, 0, 0),
                 child: Text(
                   painting.title,
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: AppColors.textPrimaryOf(context),
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
-                    letterSpacing: -0.2,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    height: 1.25,
                   ),
                 ),
               ),
-              if ((painting.description ?? '').trim().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(0, 6, 0, 0),
+                child: Text(
+                  painting.artistDisplayName ?? 'Artyug Artist',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppColors.textSecondaryOf(context),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              if (specs.isNotEmpty)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+                  padding: const EdgeInsets.fromLTRB(0, 6, 0, 0),
                   child: Text(
-                    painting.description!.trim(),
+                    specs,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: AppColors.textSecondaryOf(context),
-                      fontSize: 12.5,
+                      color: AppColors.textPrimaryOf(context),
+                      fontSize: 12,
                       height: 1.35,
+                    ),
+                  ),
+                ),
+              if (painting.price != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(0, 8, 0, 2),
+                  child: Text(
+                    painting.displayPrice.replaceAll('â‚¹', 'Rs. '),
+                    style: TextStyle(
+                      color: AppColors.textPrimaryOf(context),
+                      fontSize: 13,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
                 ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                child: Row(
-                  children: [
-                    _ActionIcon(
-                      menuContext: context,
-                      icon: widget.isLiked
-                          ? Icons.favorite_rounded
-                          : Icons.favorite_border_rounded,
-                      label: '${painting.likesCount}',
-                      active: widget.isLiked,
-                      onTap: widget.onLike,
-                    ),
-                    const SizedBox(width: 10),
-                    _ActionIcon(
-                      menuContext: context,
-                      icon: Icons.verified_user_outlined,
-                      label: 'Auth',
-                      onTap: () => context.push('/authenticity-center'),
-                    ),
-                    const Spacer(),
-                    if (widget.showBuyButton)
-                      painting.isAvailable
-                          ? _PrimaryPillButton(
-                              label: 'Buy',
-                              onTap: () => context.push(
-                                  '/checkout/${painting.id}',
-                                  extra: painting),
-                            )
-                          : _MutedPill(
-                              menuContext: context,
-                              label:
-                                  painting.isSold ? 'Sold' : 'Not listed',
-                            ),
-                  ],
-                ),
-              ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CreatorPill extends StatelessWidget {
-  final String name;
-  final bool verified;
-  final String? avatarUrl;
-
-  const _CreatorPill({
-    required this.name,
-    required this.verified,
-    this.avatarUrl,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 180),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.58),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white12),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          CircleAvatar(
-            radius: 8,
-            backgroundColor: AppColors.surfaceHigh,
-            foregroundImage: avatarUrl != null && avatarUrl!.isNotEmpty
-                ? CachedNetworkImageProvider(avatarUrl!)
-                : null,
-            child: Text(
-              (name.trim().isNotEmpty ? name.trim().substring(0, 1) : 'A')
-                  .toUpperCase(),
-              style: const TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              name,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          if (verified) ...[
-            const SizedBox(width: 5),
-            const Icon(Icons.verified_rounded, size: 12, color: AppColors.info),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _StatusPill extends StatelessWidget {
-  final String label;
-  final Color color;
-
-  const _StatusPill({required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.5,
-        ),
-      ),
-    );
-  }
-}
-
-class _ActionIcon extends StatelessWidget {
-  final BuildContext menuContext;
-  final IconData icon;
-  final String label;
-  final bool active;
-  final VoidCallback? onTap;
-
-  const _ActionIcon({
-    required this.menuContext,
-    required this.icon,
-    required this.label,
-    this.active = false,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final muted = AppColors.textSecondaryOf(menuContext);
-    return InkWell(
-      borderRadius: BorderRadius.circular(999),
-      onTap: () {
-        HapticFeedback.selectionClick();
-        onTap?.call();
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              size: 18,
-              color: active ? const Color(0xFFFF5D7A) : muted,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                color: active ? const Color(0xFFFF5D7A) : muted,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PrimaryPillButton extends StatelessWidget {
-  final String label;
-  final VoidCallback onTap;
-
-  const _PrimaryPillButton({required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        onTap();
-      },
-      borderRadius: BorderRadius.circular(999),
-      child: Ink(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(
-          gradient: AppColors.goldGradient,
-          borderRadius: BorderRadius.circular(999),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.35),
-              blurRadius: 12,
-              offset: const Offset(0, 5),
-            ),
-          ],
-        ),
-        child: Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MutedPill extends StatelessWidget {
-  final BuildContext menuContext;
-  final String label;
-
-  const _MutedPill({required this.menuContext, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceMutedOf(menuContext),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppColors.borderOf(menuContext)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: AppColors.textSecondaryOf(menuContext),
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
         ),
       ),
     );

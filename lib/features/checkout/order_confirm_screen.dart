@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/config/app_config.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/certificate.dart';
 import '../../models/order.dart';
@@ -54,6 +55,7 @@ class OrderConfirmScreen extends StatelessWidget {
                 _AuthenticityCertificate(
                   cert: cert,
                   solanaExplorerUrl: result.solanaExplorerUrl,
+                  purchaseMode: result.purchaseMode,
                 ),
               ],
               const SizedBox(height: 28),
@@ -440,10 +442,12 @@ class _OrderReceiptCard extends StatelessWidget {
 class _AuthenticityCertificate extends StatelessWidget {
   final CertificateModel cert;
   final String? solanaExplorerUrl;
+  final String purchaseMode;
 
   const _AuthenticityCertificate({
     required this.cert,
     required this.solanaExplorerUrl,
+    required this.purchaseMode,
   });
 
   static const _gold = Color(0xFFD4A574);
@@ -488,8 +492,12 @@ class _AuthenticityCertificate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final explorerUrl = solanaExplorerUrl ?? cert.solanaExplorerUrl;
     final txSig = cert.transactionSignature;
+    final linkMode =
+        purchaseMode.toLowerCase() == 'demo' ? ChainMode.devnet : ChainMode.mainnet;
+    final explorerUrl = txSig != null
+        ? AppConfig.buildSolscanUrl(txSig, mode: linkMode)
+        : solanaExplorerUrl ?? cert.solanaExplorerUrl;
 
     return Container(
       width: double.infinity,

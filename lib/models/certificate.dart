@@ -80,8 +80,7 @@ class CertificateModel {
     if (!isBlockchainAnchored) return null;
     final h = blockchainHash!.trim();
     if (h.startsWith('http://') || h.startsWith('https://')) return h;
-    final cluster = AppConfig.chainMode.name;
-    return 'https://explorer.solana.com/tx/$h?cluster=$cluster';
+    return AppConfig.buildSolanaExplorerUrl(h, mode: AppConfig.chainMode);
   }
 
   /// Raw Solana transaction signature (base58) when the record is on-chain.

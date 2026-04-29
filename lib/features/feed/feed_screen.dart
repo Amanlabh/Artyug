@@ -491,7 +491,7 @@ class _FeedScreenState extends State<FeedScreen> {
     if (hash.startsWith('0x')) return null;
     final isBase58 = RegExp(r'^[1-9A-HJ-NP-Za-km-z]{43,128}$').hasMatch(hash);
     if (!isBase58) return null;
-    return 'https://explorer.solana.com/tx/$hash?cluster=${AppConfig.chainMode.name}';
+    return AppConfig.buildSolanaExplorerUrl(hash, mode: AppConfig.chainMode);
   }
 
   @override

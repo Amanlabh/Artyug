@@ -106,6 +106,7 @@ class MainTabsScreen extends StatefulWidget {
 class _MainTabsScreenState extends State<MainTabsScreen> {
   final GlobalKey<ScaffoldState> _mobileShellKey = GlobalKey<ScaffoldState>();
   _DashboardView _dashboardView = _DashboardView.creator;
+  bool _isDesktopSidebarOpen = true;
 
   List<Widget> get _screens => [
         const FeedScreen(useShellTopBar: true),
@@ -232,12 +233,15 @@ class _MainTabsScreenState extends State<MainTabsScreen> {
       body: SafeArea(
         child: Row(
           children: [
-            _PremiumSidebar(
-              openItem: _openNavItem,
-              isActive: (item) => _isItemActive(item, currentIndex),
-              scrollable: false,
-            ),
-            const VerticalDivider(width: 1, thickness: 1),
+            if (_isDesktopSidebarOpen) ...[
+              _PremiumSidebar(
+                openItem: _openNavItem,
+                isActive: (item) => _isItemActive(item, currentIndex),
+                scrollable: false,
+                onClose: () => setState(() => _isDesktopSidebarOpen = false),
+              ),
+              const VerticalDivider(width: 1, thickness: 1),
+            ],
             Expanded(
               child: Column(
                 children: [
@@ -245,6 +249,9 @@ class _MainTabsScreenState extends State<MainTabsScreen> {
                     modeProvider: modeProvider,
                     authProvider: auth,
                     onModeTap: () => _showModeToggle(context, modeProvider),
+                    showSidebarToggle: !_isDesktopSidebarOpen,
+                    onSidebarToggle: () =>
+                        setState(() => _isDesktopSidebarOpen = true),
                   ),
                   Expanded(
                     child: Container(
@@ -492,11 +499,13 @@ class _PremiumSidebar extends StatelessWidget {
   final bool Function(_NavItem item) isActive;
   /// When true (mobile drawer), content scrolls and skips [Spacer] layout.
   final bool scrollable;
+  final VoidCallback? onClose;
 
   const _PremiumSidebar({
     required this.openItem,
     required this.isActive,
     this.scrollable = false,
+    this.onClose,
   });
 
   @override
@@ -511,6 +520,18 @@ class _PremiumSidebar extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (!scrollable && onClose != null)
+              Align(
+                alignment: Alignment.centerRight,
+                child: IconButton(
+                  onPressed: onClose,
+                  tooltip: 'Close sidebar',
+                  icon: Icon(
+                    Icons.menu_open_rounded,
+                    color: AppColors.textSecondaryOf(context),
+                  ),
+                ),
+              ),
             RichText(
               text: TextSpan(
                 children: [
@@ -791,11 +812,15 @@ class _ShellTopBar extends StatelessWidget {
   final AppModeProvider modeProvider;
   final AuthProvider authProvider;
   final VoidCallback onModeTap;
+  final bool showSidebarToggle;
+  final VoidCallback? onSidebarToggle;
 
   const _ShellTopBar({
     required this.modeProvider,
     required this.authProvider,
     required this.onModeTap,
+    this.showSidebarToggle = false,
+    this.onSidebarToggle,
   });
 
   @override
@@ -809,6 +834,13 @@ class _ShellTopBar extends StatelessWidget {
       ),
       child: Row(
         children: [
+          if (showSidebarToggle && onSidebarToggle != null) ...[
+            _IconShellButton(
+              icon: Icons.menu_rounded,
+              onTap: onSidebarToggle!,
+            ),
+            const SizedBox(width: 12),
+          ],
           Expanded(
             child: ArtyugSearchRouteTrigger(
               height: 46,

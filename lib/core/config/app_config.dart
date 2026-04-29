@@ -69,6 +69,35 @@ class AppConfig {
   static bool get isDemoMode => appMode == AppMode.demo;
   static bool get isLiveMode => appMode == AppMode.live;
 
+  static String solanaExplorerClusterValue([ChainMode? mode]) {
+    final effectiveMode = mode ?? chainMode;
+    return effectiveMode == ChainMode.devnet ? 'devnet' : 'mainnet-beta';
+  }
+
+  static String buildSolanaExplorerUrl(
+    String signature, {
+    ChainMode? mode,
+  }) {
+    final trimmed = signature.trim();
+    final effectiveMode = mode ?? chainMode;
+    if (effectiveMode == ChainMode.devnet) {
+      return 'https://explorer.solana.com/tx/$trimmed?cluster=devnet';
+    }
+    return 'https://explorer.solana.com/tx/$trimmed';
+  }
+
+  static String buildSolscanUrl(
+    String signature, {
+    ChainMode? mode,
+  }) {
+    final trimmed = signature.trim();
+    final effectiveMode = mode ?? chainMode;
+    if (effectiveMode == ChainMode.devnet) {
+      return 'https://solscan.io/tx/$trimmed?cluster=devnet';
+    }
+    return 'https://solscan.io/tx/$trimmed';
+  }
+
   // ─── Feature Flags ───────────────────────────────────────────────────────
   static bool get nfcEnabled =>
       dotenv.env['ENABLE_NFC']?.toLowerCase() == 'true';

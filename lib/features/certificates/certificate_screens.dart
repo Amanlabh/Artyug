@@ -792,10 +792,10 @@ class _BlockchainSection extends StatelessWidget {
             const SizedBox(height: 14),
             SizedBox(width: double.infinity, child: OutlinedButton.icon(
               onPressed: () {
-                final base = AppConfig.isDemoMode
-                    ? 'https://explorer.solana.com/tx'
-                    : 'https://explorer.solana.com/tx';
-                final url = '$base/${cert.txHash!}?cluster=${chainMode.toLowerCase()}';
+                final url = AppConfig.buildSolanaExplorerUrl(
+                  cert.txHash!,
+                  mode: AppConfig.isDemoMode ? ChainMode.devnet : ChainMode.mainnet,
+                );
                 Clipboard.setData(ClipboardData(text: url));
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Explorer URL copied')));
               },
