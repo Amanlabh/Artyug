@@ -134,7 +134,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
       final raw = await _supabase
           .from('shops')
           .select(
-              'id, name, slug, description, avatar_url, category, created_at, likes_count, views_count, owner_id')
+              'id, name, slug, description, avatar_url, cover_image_url, category, created_at, likes_count, views_count, owner_id')
           .eq('is_active', true)
           .order('created_at', ascending: false)
           .limit(28);
@@ -422,12 +422,21 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
                       // ── Featured artists row ──────────────────────────
                       if (_artists.isNotEmpty) ...[
-                        Text('CREATORS',
-                            style: TextStyle(
-                                color: AppColors.textTertiaryOf(context),
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 1.2)),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('CREATORS',
+                                style: TextStyle(
+                                    color: AppColors.textTertiaryOf(context),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 1.2)),
+                            TextButton(
+                              onPressed: () => context.push('/search?q=artist'),
+                              child: const Text('View all'),
+                            ),
+                          ],
+                        ),
                         const SizedBox(height: 12),
                         SizedBox(
                           height: 100,
@@ -442,14 +451,21 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         ),
                         const SizedBox(height: 20),
                       ],
-
-
-                      Text('STUDIOS',
-                          style: TextStyle(
-                              color: AppColors.textTertiaryOf(context),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 1.2)),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('FEATURED GALLERIES',
+                              style: TextStyle(
+                                  color: AppColors.textTertiaryOf(context),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 1.2)),
+                          TextButton(
+                            onPressed: () => context.push('/shop'),
+                            child: const Text('View all galleries'),
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 10),
                       SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
@@ -515,7 +531,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         )
                       else
                         SizedBox(
-                          height: 132,
+                          height: 254,
                           child: ListView.separated(
                             scrollDirection: Axis.horizontal,
                             itemCount: _filteredStudios.length.clamp(0, 10),
@@ -594,7 +610,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                               crossAxisCount: 2,
                               crossAxisSpacing: 10,
                               mainAxisSpacing: 10,
-                              childAspectRatio: 0.54,
+                              childAspectRatio: 0.78,
                             ),
                           ),
                         ),
@@ -645,60 +661,116 @@ class _StudioDiscoveryCard extends StatelessWidget {
         : 'Studio';
     final slug = (studio['slug'] as String?)?.trim();
     final avatar = (studio['avatar_url'] as String?)?.trim();
+    final cover = SupabaseMediaUrl.resolve(studio['cover_image_url'] as String?);
     final profile = studio['profile'] as Map<String, dynamic>?;
     final by = (profile?['display_name'] as String?)?.trim().isNotEmpty == true
         ? (profile!['display_name'] as String).trim()
         : 'Creator';
     final works = (studio['artworks_count'] as int?) ?? 0;
     final collections = (studio['collections_count'] as int?) ?? 0;
+    final category = (studio['category'] as String?)?.trim();
 
     return GestureDetector(
       onTap: () =>
           context.push(slug != null && slug.isNotEmpty ? '/shop/$slug' : '/shop'),
       child: Container(
-        width: 260,
-        padding: const EdgeInsets.all(12),
+        width: 306,
         decoration: BoxDecoration(
           color: AppColors.surfaceOf(context),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: AppColors.borderOf(context)),
         ),
-        child: Row(
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CircleAvatar(
-              radius: 24,
-              backgroundColor: AppColors.primary.withValues(alpha: 0.16),
-              backgroundImage: (avatar != null && avatar.isNotEmpty)
-                  ? CachedNetworkImageProvider(avatar)
-                  : null,
-              child: (avatar == null || avatar.isEmpty)
-                  ? Text(
-                      name.substring(0, 1).toUpperCase(),
-                      style: const TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w800,
-                      ),
+            SizedBox(
+              height: 160,
+              width: double.infinity,
+              child: cover.isNotEmpty
+                  ? CachedNetworkImage(
+                      imageUrl: cover,
+                      fit: BoxFit.cover,
                     )
-                  : null,
+                  : Container(
+                      color: AppColors.surfaceMutedOf(context),
+                      child: Center(
+                        child: CircleAvatar(
+                          radius: 28,
+                          backgroundColor:
+                              AppColors.primary.withValues(alpha: 0.16),
+                          backgroundImage: (avatar != null && avatar.isNotEmpty)
+                              ? CachedNetworkImageProvider(avatar)
+                              : null,
+                          child: (avatar == null || avatar.isEmpty)
+                              ? Text(
+                                  name.substring(0, 1).toUpperCase(),
+                                  style: const TextStyle(
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                )
+                              : null,
+                        ),
+                      ),
+                    ),
             ),
-            const SizedBox(width: 10),
-            Expanded(
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: AppColors.textPrimaryOf(context),
-                      fontWeight: FontWeight.w800,
-                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: AppColors.textPrimaryOf(context),
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ),
+                      OutlinedButton(
+                        onPressed: () {},
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(82, 32),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                        child: const Text('Follow'),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 2),
+                  if (category != null && category.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.accentSoftOf(context),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        category,
+                        style: TextStyle(
+                          color: AppColors.accentOf(context),
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 6),
                   Text(
-                    'by $by',
+                    by,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -706,9 +778,9 @@ class _StudioDiscoveryCard extends StatelessWidget {
                       fontSize: 12,
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   Text(
-                    '$works works • $collections collections',
+                    '$works works - $collections collections',
                     style: TextStyle(
                       color: AppColors.textTertiaryOf(context),
                       fontSize: 11.5,
@@ -724,7 +796,6 @@ class _StudioDiscoveryCard extends StatelessWidget {
   }
 }
 
-// ─── Artist Pill (horizontal scroll) ─────────────────────────────────────────
 class _ArtistPill extends StatelessWidget {
   final Map<String, dynamic> artist;
   const _ArtistPill({required this.artist});
@@ -941,7 +1012,7 @@ class _ArtworkCardState extends State<_ArtworkCard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             AspectRatio(
-              aspectRatio: 1.12,
+              aspectRatio: 1.34,
               child: imageUrl != null
                   ? CachedNetworkImage(
                       imageUrl: imageUrl,
@@ -970,12 +1041,11 @@ class _ArtworkCardState extends State<_ArtworkCard> {
                       ),
                     ),
             ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1045,7 +1115,7 @@ class _ArtworkCardState extends State<_ArtworkCard> {
                       const SizedBox(height: 8),
                       Text(
                         visibleDescription,
-                        maxLines: _expanded ? 5 : 2,
+                        maxLines: _expanded ? 4 : 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: AppColors.textSecondaryOf(context),
@@ -1068,9 +1138,9 @@ class _ArtworkCardState extends State<_ArtworkCard> {
                             ),
                           ),
                         ),
-                    ],
-                    const Spacer(),
-                    SizedBox(
+                  ],
+                  const SizedBox(height: 10),
+                  SizedBox(
                       width: double.infinity,
                       child: FilledButton(
                         onPressed: available
@@ -1097,8 +1167,7 @@ class _ArtworkCardState extends State<_ArtworkCard> {
                         ),
                       ),
                     ),
-                  ],
-                ),
+                ],
               ),
             ),
           ],

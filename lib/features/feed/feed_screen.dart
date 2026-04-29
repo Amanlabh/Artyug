@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -200,16 +202,17 @@ class _FeedScreenState extends State<FeedScreen> {
                       ? (row['artwork_title'] as String).trim()
                       : 'Untitled Artwork',
               artworkMediaUrl: row['artwork_media_url'] as String?,
-              buyerName: (row['buyer_name'] as String?)?.trim().isNotEmpty == true
-                  ? (row['buyer_name'] as String).trim()
-                  : 'Collector',
+              buyerName:
+                  (row['buyer_name'] as String?)?.trim().isNotEmpty == true
+                      ? (row['buyer_name'] as String).trim()
+                      : 'Collector',
               amount: (row['amount'] as num?)?.toDouble(),
               currency: (row['currency'] as String?) ?? 'INR',
               purchasedAt: row['created_at'] != null
                   ? DateTime.tryParse(row['created_at'] as String)
                   : null,
               solanaExplorerUrl:
-                  _buildExplorerUrl(row['certificate_blockchain_hash'] as String?),
+                  _buildExplorerUrl(_recentActivityHashFromRow(row)),
             ),
           )
           .toList();
@@ -285,7 +288,8 @@ class _FeedScreenState extends State<FeedScreen> {
     try {
       final rows = await SupabaseClientHelper.db
           .from('auctions')
-          .select('id, painting_id, current_highest_bid, end_time, status, bid_increment')
+          .select(
+              'id, painting_id, current_highest_bid, end_time, status, bid_increment')
           .inFilter('status', ['active', 'live'])
           .order('end_time', ascending: true)
           .limit(10);
@@ -349,7 +353,9 @@ class _FeedScreenState extends State<FeedScreen> {
 
   Future<void> _rememberViewedArtwork(String id) async {
     if (id.isEmpty) return;
-    final next = [id, ..._recentViewedArtworkIds.where((e) => e != id)].take(20).toList();
+    final next = [id, ..._recentViewedArtworkIds.where((e) => e != id)]
+        .take(20)
+        .toList();
     if (mounted) {
       setState(() => _recentViewedArtworkIds = next);
     }
@@ -370,6 +376,25 @@ class _FeedScreenState extends State<FeedScreen> {
           .limit(8);
 
       final data = List<Map<String, dynamic>>.from(rows as List);
+      final orderIds =
+          data.map((row) => row['id']?.toString()).whereType<String>().toList();
+      Map<String, String?> hashByOrder = const {};
+      if (orderIds.isNotEmpty) {
+        try {
+          final certRows = await SupabaseClientHelper.db
+              .from('certificates')
+              .select('order_id, blockchain_hash, tx_hash')
+              .inFilter('order_id', orderIds);
+          hashByOrder = {
+            for (final row in (certRows as List).cast<Map<String, dynamic>>())
+              (row['order_id']?.toString() ?? ''):
+                  _recentActivityHashFromRow(row),
+          };
+        } catch (_) {
+          hashByOrder = const {};
+        }
+      }
+
       final items = data
           .map(
             (row) => _RecentActivityItem(
@@ -389,7 +414,8 @@ class _FeedScreenState extends State<FeedScreen> {
               purchasedAt: row['created_at'] != null
                   ? DateTime.tryParse(row['created_at'] as String)
                   : null,
-              solanaExplorerUrl: null,
+              solanaExplorerUrl:
+                  _buildExplorerUrl(hashByOrder[row['id']?.toString() ?? '']),
             ),
           )
           .toList();
@@ -442,7 +468,8 @@ class _FeedScreenState extends State<FeedScreen> {
     final copy = List<PaintingModel>.from(paintings);
     switch (_smartSort) {
       case 'Newest':
-        copy.sort((a, b) => (b.createdAt ?? DateTime(2000)).compareTo(a.createdAt ?? DateTime(2000)));
+        copy.sort((a, b) => (b.createdAt ?? DateTime(2000))
+            .compareTo(a.createdAt ?? DateTime(2000)));
         break;
       case 'Price: Low-High':
         copy.sort((a, b) => (a.price ?? 0).compareTo(b.price ?? 0));
@@ -451,12 +478,19 @@ class _FeedScreenState extends State<FeedScreen> {
         copy.sort((a, b) => (b.price ?? 0).compareTo(a.price ?? 0));
         break;
       case 'Auction Ending Soon':
-        copy.sort((a, b) => (a.listingType == 'auction' ? 0 : 1).compareTo(b.listingType == 'auction' ? 0 : 1));
+        copy.sort((a, b) => (a.listingType == 'auction' ? 0 : 1)
+            .compareTo(b.listingType == 'auction' ? 0 : 1));
         break;
       default:
         copy.sort((a, b) {
-          final as = (a.likesCount * 3) + (a.viewsCount) + (a.bidsCount * 5) + (a.purchasesCount * 8);
-          final bs = (b.likesCount * 3) + (b.viewsCount) + (b.bidsCount * 5) + (b.purchasesCount * 8);
+          final as = (a.likesCount * 3) +
+              (a.viewsCount) +
+              (a.bidsCount * 5) +
+              (a.purchasesCount * 8);
+          final bs = (b.likesCount * 3) +
+              (b.viewsCount) +
+              (b.bidsCount * 5) +
+              (b.purchasesCount * 8);
           return bs.compareTo(as);
         });
     }
@@ -494,6 +528,22 @@ class _FeedScreenState extends State<FeedScreen> {
     return AppConfig.buildSolanaExplorerUrl(hash, mode: AppConfig.chainMode);
   }
 
+  String? _recentActivityHashFromRow(Map<String, dynamic> row) {
+    final candidates = [
+      row['certificate_blockchain_hash'],
+      row['blockchain_hash'],
+      row['tx_hash'],
+      row['transaction_hash'],
+    ];
+    for (final raw in candidates) {
+      final value = raw?.toString().trim();
+      if (value != null && value.isNotEmpty && value.toLowerCase() != 'null') {
+        return value;
+      }
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final isProMode = context.watch<FeedViewModeProvider>().isProMode;
@@ -507,31 +557,36 @@ class _FeedScreenState extends State<FeedScreen> {
           final artistItems = _buildArtistItems(smartPaintings);
           final communityItems = _buildCommunityItems(smartPaintings);
           final becauseYouFollow = smartPaintings
-              .where((p) => _followedArtistIds.contains(p.artistId) || (_followedStudioIds.contains(p.shopId)))
+              .where((p) =>
+                  _followedArtistIds.contains(p.artistId) ||
+                  (_followedStudioIds.contains(p.shopId)))
               .take(8)
               .toList();
-          final continueExploringSeed = smartPaintings
-              .where((p) => _recentViewedArtworkIds.contains(p.id))
-              .take(8)
-              .toList();
-          final continueExploring = continueExploringSeed.isNotEmpty
-              ? continueExploringSeed
-              : smartPaintings
-                  .where((p) => !becauseYouFollow.any((b) => b.id == p.id))
-                  .take(8)
-                  .toList();
           final topVerified = smartPaintings
-              .where((p) => p.isVerifiedArtwork || (p.artistIsVerified ?? false) || p.hasNfcAttached)
+              .where((p) =>
+                  p.isVerifiedArtwork ||
+                  (p.artistIsVerified ?? false) ||
+                  p.hasNfcAttached)
               .take(8)
               .toList();
-          final liveAuctionRows = _liveAuctions.where((a) {
-            final pid = a['painting_id']?.toString();
-            return pid != null && smartPaintings.any((p) => p.id == pid);
-          }).take(8).toList();
+          final photographySpotlight = smartPaintings
+              .where((p) {
+                final medium = (p.medium ?? '').toLowerCase().trim();
+                final category = (p.category ?? '').toLowerCase().trim();
+                return medium.contains('photo') || category.contains('photo');
+              })
+              .take(12)
+              .toList();
+          final liveAuctionRows = _liveAuctions
+              .where((a) {
+                final pid = a['painting_id']?.toString();
+                return pid != null && smartPaintings.any((p) => p.id == pid);
+              })
+              .take(8)
+              .toList();
 
           _prefetchFromPaintings(ecoPreview);
           _prefetchFromPaintings(becauseYouFollow);
-          _prefetchFromPaintings(continueExploring);
           _prefetchFromPaintings(topVerified);
 
           final width = MediaQuery.sizeOf(context).width;
@@ -565,7 +620,8 @@ class _FeedScreenState extends State<FeedScreen> {
                     padding: EdgeInsets.fromLTRB(hPad, topPad, hPad, 0),
                     child: _SectionHeader(
                       title: 'Featured Art',
-                      subtitle: 'Curated highlights from verified and trending creators',
+                      subtitle:
+                          'Curated highlights from verified and trending creators',
                       actionLabel: 'View all',
                       onActionTap: _openExploreTab,
                     ),
@@ -578,16 +634,14 @@ class _FeedScreenState extends State<FeedScreen> {
                       // Pin "Nutan Labh" artworks first in the featured rail
                       const featuredArtist = 'nutan labh';
                       final pinned = smartPaintings
-                          .where((p) =>
-                              (p.artistDisplayName ?? '')
-                                  .toLowerCase()
-                                  .contains(featuredArtist))
+                          .where((p) => (p.artistDisplayName ?? '')
+                              .toLowerCase()
+                              .contains(featuredArtist))
                           .toList();
                       final rest = smartPaintings
-                          .where((p) =>
-                              !(p.artistDisplayName ?? '')
-                                  .toLowerCase()
-                                  .contains(featuredArtist))
+                          .where((p) => !(p.artistDisplayName ?? '')
+                              .toLowerCase()
+                              .contains(featuredArtist))
                           .toList();
                       return [...pinned, ...rest].take(10).toList();
                     }(),
@@ -612,7 +666,8 @@ class _FeedScreenState extends State<FeedScreen> {
                     padding: EdgeInsets.fromLTRB(hPad, 20, hPad, 10),
                     child: _SectionHeader(
                       title: 'Ecosystem Feed',
-                      subtitle: 'Fresh artworks from Artyug creators and communities',
+                      subtitle:
+                          'Fresh artworks from Artyug creators and communities',
                       actionLabel: 'Show more',
                       onActionTap: () => _openEcosystemShowMore(
                         context,
@@ -622,6 +677,26 @@ class _FeedScreenState extends State<FeedScreen> {
                     ),
                   ),
                 ),
+                if (photographySpotlight.isNotEmpty)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(hPad, 10, hPad, 0),
+                      child: _SectionHeader(
+                        title: 'Photography Spotlight',
+                        subtitle:
+                            'Image-first photography curated in a quiet gallery wall',
+                        actionLabel: 'View all',
+                        onActionTap: _openExploreTab,
+                      ),
+                    ),
+                  ),
+                if (photographySpotlight.isNotEmpty)
+                  SliverToBoxAdapter(
+                    child: _PhotographyWall(
+                      horizontalPadding: hPad,
+                      paintings: photographySpotlight,
+                    ),
+                  ),
                 if (feed.loading && feed.paintings.isEmpty)
                   SliverToBoxAdapter(
                     child: Padding(
@@ -655,12 +730,11 @@ class _FeedScreenState extends State<FeedScreen> {
                       padding: EdgeInsets.fromLTRB(hPad, 6, hPad, 16),
                       child: Center(
                         child: OutlinedButton.icon(
-                          onPressed: () =>
-                              _openEcosystemShowMore(
-                                context,
-                                feed,
-                                paintings: smartPaintings,
-                              ),
+                          onPressed: () => _openEcosystemShowMore(
+                            context,
+                            feed,
+                            paintings: smartPaintings,
+                          ),
                           icon: const Icon(Icons.grid_view_rounded, size: 18),
                           label: const Text('Show more'),
                         ),
@@ -680,78 +754,80 @@ class _FeedScreenState extends State<FeedScreen> {
                 ),
                 if (isProMode)
                   SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(hPad, 2, hPad, 0),
-                    child: _SectionHeader(
-                      title: 'Recent Activity',
-                      subtitle:
-                          'Latest artwork purchases with collector and Solana proof links',
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(hPad, 2, hPad, 0),
+                      child: _SectionHeader(
+                        title: 'Recent Activity',
+                        subtitle:
+                            'Latest artwork purchases with collector and Solana proof links',
+                      ),
                     ),
                   ),
-                ),
                 if (isProMode)
                   SliverToBoxAdapter(
-                  child: _RecentActivityStrip(
-                    horizontalPadding: hPad,
-                    loading: _recentActivityLoading,
-                    error: _recentActivityError,
-                    items: _recentActivities,
-                    onRetry: _loadRecentActivity,
-                    onOpenArtwork: (artworkId) {
-                      if (artworkId != null && artworkId.isNotEmpty) {
-                        context.push('/artwork/$artworkId');
-                      }
-                    },
-                  ),
-                ),
-                if (isProMode)
-                  SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(hPad, 4, hPad, 0),
-                    child: _SectionHeader(
-                      title: 'Trending Collections',
-                      subtitle:
-                          'High-momentum sets collecting attention this week',
-                      actionLabel: 'View all',
-                      onActionTap: _openExploreTab,
+                    child: _RecentActivityStrip(
+                      horizontalPadding: hPad,
+                      loading: _recentActivityLoading,
+                      error: _recentActivityError,
+                      items: _recentActivities,
+                      onRetry: _loadRecentActivity,
+                      onOpenArtwork: (artworkId) {
+                        if (artworkId != null && artworkId.isNotEmpty) {
+                          context.push('/artwork/$artworkId');
+                        }
+                      },
                     ),
                   ),
-                ),
                 if (isProMode)
                   SliverToBoxAdapter(
-                  child: _HorizontalCollections(
-                    horizontalPadding: hPad,
-                    collections: collectionItems.take(8).toList(),
-                    onTap: _openExploreTab,
-                  ),
-                ),
-                if (isProMode)
-                  SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(hPad, 22, hPad, 0),
-                    child: _SectionHeader(
-                      title: 'Featured Artists',
-                      subtitle:
-                          'Verified voices with strong community engagement',
-                      actionLabel: 'View all',
-                      onActionTap: _openExploreTab,
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(hPad, 4, hPad, 0),
+                      child: _SectionHeader(
+                        title: 'Trending Collections',
+                        subtitle:
+                            'High-momentum sets collecting attention this week',
+                        actionLabel: 'View all',
+                        onActionTap: _openExploreTab,
+                      ),
                     ),
                   ),
-                ),
                 if (isProMode)
                   SliverToBoxAdapter(
-                  child: _HorizontalArtists(
-                    horizontalPadding: hPad,
-                    artists: artistItems.take(8).toList(),
-                    onTap: (artist) => context.push('/public-profile/${artist.id}'),
+                    child: _HorizontalCollections(
+                      horizontalPadding: hPad,
+                      collections: collectionItems.take(8).toList(),
+                      onTap: _openExploreTab,
+                    ),
                   ),
-                ),
+                if (isProMode)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(hPad, 22, hPad, 0),
+                      child: _SectionHeader(
+                        title: 'Featured Artists',
+                        subtitle:
+                            'Verified voices with strong community engagement',
+                        actionLabel: 'View all',
+                        onActionTap: _openExploreTab,
+                      ),
+                    ),
+                  ),
+                if (isProMode)
+                  SliverToBoxAdapter(
+                    child: _HorizontalArtists(
+                      horizontalPadding: hPad,
+                      artists: artistItems.take(8).toList(),
+                      onTap: (artist) =>
+                          context.push('/public-profile/${artist.id}'),
+                    ),
+                  ),
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: EdgeInsets.fromLTRB(hPad, 18, hPad, 0),
                     child: _SectionHeader(
                       title: 'Because You Follow',
-                      subtitle: 'Personalized from your followed artists and studios',
+                      subtitle:
+                          'Personalized from your followed artists and studios',
                       actionLabel: 'View all',
                       onActionTap: () => context.push('/search?q=artist'),
                     ),
@@ -762,7 +838,8 @@ class _FeedScreenState extends State<FeedScreen> {
                     padding: EdgeInsets.fromLTRB(hPad, 10, hPad, 0),
                     child: _CompactArtworkRail(
                       paintings: becauseYouFollow,
-                      emptyLabel: 'Follow more artists to personalize this rail.',
+                      emptyLabel:
+                          'Follow more artists to personalize this rail.',
                       onOpenExplore: () => context.push('/search?q=artist'),
                     ),
                   ),
@@ -792,27 +869,6 @@ class _FeedScreenState extends State<FeedScreen> {
                   child: Padding(
                     padding: EdgeInsets.fromLTRB(hPad, 18, hPad, 0),
                     child: _SectionHeader(
-                      title: 'Continue Exploring',
-                      subtitle: 'Resume where you left off',
-                      actionLabel: 'View all',
-                      onActionTap: _openExploreTab,
-                    ),
-                  ),
-                ),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(hPad, 10, hPad, 0),
-                    child: _CompactArtworkRail(
-                      paintings: continueExploring,
-                      emptyLabel: 'Explore artworks and we will remember your trail here.',
-                      onOpenExplore: _openExploreTab,
-                    ),
-                  ),
-                ),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(hPad, 18, hPad, 0),
-                    child: _SectionHeader(
                       title: 'Top Verified This Week',
                       subtitle: 'Verification and provenance-first highlights',
                       actionLabel: 'View all',
@@ -832,75 +888,76 @@ class _FeedScreenState extends State<FeedScreen> {
                 ),
                 if (isProMode)
                   SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(hPad, 22, hPad, 0),
-                    child: _SectionHeader(
-                      title: 'Featured Studios',
-                      subtitle: 'Signature creator studios with active collections',
-                      actionLabel: 'View all',
-                      onActionTap: () => context.push('/shop'),
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(hPad, 22, hPad, 0),
+                      child: _SectionHeader(
+                        title: 'Featured Studios',
+                        subtitle:
+                            'Signature creator studios with active collections',
+                        actionLabel: 'View all',
+                        onActionTap: () => context.push('/shop'),
+                      ),
                     ),
                   ),
-                ),
                 if (isProMode)
                   SliverToBoxAdapter(
-                  child: _FeaturedStudiosStrip(
-                    horizontalPadding: hPad,
-                    studios: _featuredStudios.take(8).toList(),
-                  ),
-                ),
-                if (isProMode)
-                  SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(hPad, 22, hPad, 0),
-                    child: _SectionHeader(
-                      title: 'Live Drops & Highlights',
-                      subtitle:
-                          'Time-sensitive listings and curated showcase moments',
-                      actionLabel: 'View all',
-                      onActionTap: _openExploreTab,
+                    child: _FeaturedStudiosStrip(
+                      horizontalPadding: hPad,
+                      studios: _featuredStudios.take(8).toList(),
                     ),
                   ),
-                ),
                 if (isProMode)
                   SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(hPad, 10, hPad, 0),
-                    child: _LiveDropsGrid(paintings: feed.paintings),
-                  ),
-                ),
-                if (isProMode)
-                  SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(hPad, 22, hPad, 0),
-                    child: _SectionHeader(
-                      title: 'Popular Guilds & Communities',
-                      subtitle:
-                          'Collective spaces where creators and collectors connect',
-                      actionLabel: 'View all',
-                      onActionTap: () => context.push('/guild'),
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(hPad, 22, hPad, 0),
+                      child: _SectionHeader(
+                        title: 'Live Drops & Highlights',
+                        subtitle:
+                            'Time-sensitive listings and curated showcase moments',
+                        actionLabel: 'View all',
+                        onActionTap: _openExploreTab,
+                      ),
                     ),
                   ),
-                ),
                 if (isProMode)
                   SliverToBoxAdapter(
-                  child: _CommunitiesRow(
-                    horizontalPadding: hPad,
-                    communities: communityItems.take(8).toList(),
-                    onTap: () => context.push('/guild'),
-                  ),
-                ),
-                if (isProMode)
-                  SliverToBoxAdapter(
-                  child: Padding(
-                    padding:
-                        EdgeInsets.fromLTRB(hPad, 22, hPad, scrollBottomPad),
-                    child: _AuthenticitySpotlight(
-                      onVerifyTap: () => context.push('/authenticity-center'),
-                      onNfcTap: () => context.push('/nfc-scan'),
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(hPad, 10, hPad, 0),
+                      child: _LiveDropsGrid(paintings: feed.paintings),
                     ),
                   ),
-                ),
+                if (isProMode)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(hPad, 22, hPad, 0),
+                      child: _SectionHeader(
+                        title: 'Popular Guilds & Communities',
+                        subtitle:
+                            'Collective spaces where creators and collectors connect',
+                        actionLabel: 'View all',
+                        onActionTap: () => context.push('/guild'),
+                      ),
+                    ),
+                  ),
+                if (isProMode)
+                  SliverToBoxAdapter(
+                    child: _CommunitiesRow(
+                      horizontalPadding: hPad,
+                      communities: communityItems.take(8).toList(),
+                      onTap: () => context.push('/guild'),
+                    ),
+                  ),
+                if (isProMode)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding:
+                          EdgeInsets.fromLTRB(hPad, 22, hPad, scrollBottomPad),
+                      child: _AuthenticitySpotlight(
+                        onVerifyTap: () => context.push('/authenticity-center'),
+                        onNfcTap: () => context.push('/nfc-scan'),
+                      ),
+                    ),
+                  ),
               ],
             ),
           );
@@ -968,7 +1025,8 @@ class _FeaturedStudiosStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     if (studios.isEmpty) {
       return Padding(
-        padding: EdgeInsets.fromLTRB(horizontalPadding, 12, horizontalPadding, 0),
+        padding:
+            EdgeInsets.fromLTRB(horizontalPadding, 12, horizontalPadding, 0),
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -990,7 +1048,8 @@ class _FeaturedStudiosStrip extends StatelessWidget {
     return SizedBox(
       height: 170,
       child: ListView.separated(
-        padding: EdgeInsets.fromLTRB(horizontalPadding, 12, horizontalPadding, 0),
+        padding:
+            EdgeInsets.fromLTRB(horizontalPadding, 12, horizontalPadding, 0),
         scrollDirection: Axis.horizontal,
         itemCount: studios.length,
         separatorBuilder: (_, __) => const SizedBox(width: 12),
@@ -1000,10 +1059,12 @@ class _FeaturedStudiosStrip extends StatelessWidget {
           final name = (s['name'] as String?)?.trim().isNotEmpty == true
               ? (s['name'] as String).trim()
               : 'Studio';
-          final by = (profile?['display_name'] as String?)?.trim().isNotEmpty == true
-              ? (profile!['display_name'] as String).trim()
-              : 'Creator';
-          final creatorAvatar = (profile?['profile_picture_url'] as String?)?.trim();
+          final by =
+              (profile?['display_name'] as String?)?.trim().isNotEmpty == true
+                  ? (profile!['display_name'] as String).trim()
+                  : 'Creator';
+          final creatorAvatar =
+              (profile?['profile_picture_url'] as String?)?.trim();
           final creatorVerified = profile?['is_verified'] == true;
           final slug = s['slug']?.toString();
           final avatar = (s['avatar_url'] as String?)?.trim();
@@ -1070,7 +1131,8 @@ class _FeaturedStudiosStrip extends StatelessWidget {
                                       ? Text(
                                           by.substring(0, 1).toUpperCase(),
                                           style: TextStyle(
-                                            color: AppColors.textSecondaryOf(context),
+                                            color: AppColors.textSecondaryOf(
+                                                context),
                                             fontSize: 9,
                                             fontWeight: FontWeight.w800,
                                           ),
@@ -1258,6 +1320,7 @@ class _DiscoveryHero extends StatelessWidget {
     );
   }
 }
+
 class _SmartFilterHeaderDelegate extends SliverPersistentHeaderDelegate {
   final Widget child;
   final double minExtentValue;
@@ -1276,7 +1339,8 @@ class _SmartFilterHeaderDelegate extends SliverPersistentHeaderDelegate {
   double get maxExtent => maxExtentValue;
 
   @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+  Widget build(
+      BuildContext context, double shrinkOffset, bool overlapsContent) {
     return Container(
       color: Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.94),
       child: child,
@@ -1318,6 +1382,7 @@ class _SmartFilterBar extends StatelessWidget {
     );
   }
 }
+
 class _MiniDropdown extends StatelessWidget {
   final String label;
   final String value;
@@ -1344,10 +1409,15 @@ class _MiniDropdown extends StatelessWidget {
         child: DropdownButton<String>(
           value: value,
           isDense: true,
-          style: TextStyle(color: AppColors.textPrimaryOf(context), fontSize: 12, fontWeight: FontWeight.w600),
+          style: TextStyle(
+              color: AppColors.textPrimaryOf(context),
+              fontSize: 12,
+              fontWeight: FontWeight.w600),
           dropdownColor: AppColors.surfaceOf(context),
           borderRadius: BorderRadius.circular(12),
-          items: values.map((v) => DropdownMenuItem(value: v, child: Text('$label: $v'))).toList(),
+          items: values
+              .map((v) => DropdownMenuItem(value: v, child: Text('$label: $v')))
+              .toList(),
           onChanged: (v) {
             if (v != null) onChanged(v);
           },
@@ -1419,10 +1489,12 @@ class _EcosystemSplitFeed extends StatelessWidget {
       );
     final threads = latestFirst.take(8).toList();
     final forSale = latestFirst
-        .where((p) => p.isAvailable || p.price != null || p.listingType == 'auction')
+        .where((p) =>
+            p.isAvailable || p.price != null || p.listingType == 'auction')
         .toList();
     final gallery = latestFirst
-        .where((p) => !(p.isAvailable || p.price != null || p.listingType == 'auction'))
+        .where((p) =>
+            !(p.isAvailable || p.price != null || p.listingType == 'auction'))
         .toList();
 
     return Column(
@@ -1430,11 +1502,14 @@ class _EcosystemSplitFeed extends StatelessWidget {
       children: [
         _MiniFeedHeader(
           title: 'Threads',
-          subtitle: 'Latest creator thoughts, process notes, and story-first posts',
+          subtitle:
+              'Latest creator thoughts, process notes, and story-first posts',
         ),
         const SizedBox(height: 10),
         if (threads.isEmpty)
-          const _MiniFeedEmpty(label: 'No threads yet. Ask creators to share their latest process.')
+          const _MiniFeedEmpty(
+              label:
+                  'No threads yet. Ask creators to share their latest process.')
         else
           _ThreadGrid(
             paintings: threads,
@@ -1448,7 +1523,8 @@ class _EcosystemSplitFeed extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         if (forSale.isEmpty)
-          const _MiniFeedEmpty(label: 'No active listings in this filter right now.')
+          const _MiniFeedEmpty(
+              label: 'No active listings in this filter right now.')
         else
           SizedBox(
             height: 340,
@@ -1477,7 +1553,8 @@ class _EcosystemSplitFeed extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         if (gallery.isEmpty)
-          const _MiniFeedEmpty(label: 'No gallery drops in this filter right now.')
+          const _MiniFeedEmpty(
+              label: 'No gallery drops in this filter right now.')
         else
           _GalleryDropGrid(
             paintings: gallery.take(6).toList(),
@@ -1489,7 +1566,7 @@ class _EcosystemSplitFeed extends StatelessWidget {
   }
 }
 
-// ── Thread Grid — 2 columns, bigger images, bio visible ─────────────────────
+// ── Thread Feed — compact social-post layout, closer to Twitter ─────────────
 class _ThreadGrid extends StatelessWidget {
   final List<PaintingModel> paintings;
   final ValueChanged<String> onLike;
@@ -1503,170 +1580,266 @@ class _ThreadGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const spacing = 10.0;
-        final tileWidth = (constraints.maxWidth - spacing) / 2;
-        return Wrap(
-          spacing: spacing,
-          runSpacing: spacing,
-          children: paintings.map((p) {
-            final bio = (p.description ?? '').trim().isNotEmpty
-                ? p.description!.trim()
-                : '${(p.medium ?? '').trim()} ${(p.category ?? '').trim()}'.trim();
-            return SizedBox(
-              width: tileWidth,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(14),
-                onTap: () {
-                  onTap?.call(p.id);
-                  context.push('/artwork/${p.id}', extra: p);
-                },
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceOf(context),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.borderOf(context)),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      children: [
+        for (var i = 0; i < paintings.length; i++) ...[
+          _ThreadPostCard(
+            painting: paintings[i],
+            onLike: () => onLike(paintings[i].id),
+            onTap: () {
+              onTap?.call(paintings[i].id);
+              context.push('/artwork/${paintings[i].id}', extra: paintings[i]);
+            },
+          ),
+          if (i != paintings.length - 1)
+            Divider(
+              height: 1,
+              thickness: 1,
+              color: AppColors.borderOf(context),
+            ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ThreadPostCard extends StatelessWidget {
+  final PaintingModel painting;
+  final VoidCallback onLike;
+  final VoidCallback onTap;
+
+  const _ThreadPostCard({
+    required this.painting,
+    required this.onLike,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final postText = (painting.description ?? '').trim().isNotEmpty
+        ? painting.description!.trim()
+        : painting.title;
+    final categoryLabel = _homepageCategoryLabel(painting);
+    final handle = (painting.artistDisplayName ?? 'artyug_artist')
+        .trim()
+        .toLowerCase()
+        .replaceAll(' ', '');
+    final hasImage = painting.resolvedImageUrl.trim().isNotEmpty;
+
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(6, 14, 6, 14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            CircleAvatar(
+              radius: 20,
+              backgroundColor: AppColors.accentSoftOf(context),
+              foregroundImage: painting.resolvedArtistAvatarUrl != null &&
+                      painting.resolvedArtistAvatarUrl!.trim().isNotEmpty
+                  ? NetworkImage(painting.resolvedArtistAvatarUrl!)
+                  : null,
+              child: Text(
+                ((painting.artistDisplayName ?? 'A').trim().isNotEmpty
+                        ? (painting.artistDisplayName ?? 'A')
+                            .trim()
+                            .substring(0, 1)
+                        : 'A')
+                    .toUpperCase(),
+                style: TextStyle(
+                  color: AppColors.accentOf(context),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      // Bigger image — nearly square
-                      MarketplaceMediaFrame(
-                        imageUrl: p.resolvedImageUrl,
-                        aspectRatio: 1.0,
-                        borderRadius: BorderRadius.zero,
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Artwork title
-                            Text(
-                              p.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: AppColors.textPrimaryOf(context),
-                                fontWeight: FontWeight.w800,
-                                fontSize: 13,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            // Artist row with avatar + name
-                            Row(
-                              children: [
-                                CircleAvatar(
-                                  radius: 9,
-                                  backgroundColor: AppColors.accentSoftOf(context),
-                                  foregroundImage: p.resolvedArtistAvatarUrl != null &&
-                                          p.resolvedArtistAvatarUrl!.trim().isNotEmpty
-                                      ? NetworkImage(p.resolvedArtistAvatarUrl!)
-                                      : null,
-                                  child: Text(
-                                    ((p.artistDisplayName ?? 'A').trim().isNotEmpty
-                                            ? (p.artistDisplayName ?? 'A').trim().substring(0, 1)
-                                            : 'A')
-                                        .toUpperCase(),
-                                    style: TextStyle(
-                                      color: AppColors.accentOf(context),
-                                      fontSize: 9.5,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 5),
-                                Expanded(
-                                  child: Text(
-                                    p.artistDisplayName ?? 'Artyug Artist',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: AppColors.textSecondaryOf(context),
-                                      fontSize: 11.5,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                                if (p.artistIsVerified ?? false)
-                                  const Padding(
-                                    padding: EdgeInsets.only(left: 3),
-                                    child: Icon(
-                                      Icons.verified_rounded,
-                                      size: 12,
-                                      color: AppColors.info,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            // Bio / description
-                            if (bio.isNotEmpty) ...[
-                              const SizedBox(height: 5),
-                              Text(
-                                bio,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: AppColors.textSecondaryOf(context),
-                                  fontSize: 11,
-                                  height: 1.3,
-                                ),
-                              ),
-                            ],
-                            const SizedBox(height: 6),
-                            // Footer: time + likes
-                            Row(
-                              children: [
-                                Text(
-                                  p.createdAt == null ? 'Just now' : _relativeTime(p.createdAt!),
-                                  style: TextStyle(
-                                    color: AppColors.textTertiaryOf(context),
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const Spacer(),
-                                InkWell(
-                                  borderRadius: BorderRadius.circular(999),
-                                  onTap: () => onLike(p.id),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        p.isLikedByMe
-                                            ? Icons.favorite_rounded
-                                            : Icons.favorite_border_rounded,
-                                        size: 13,
-                                        color: p.isLikedByMe
-                                            ? AppColors.primary
-                                            : AppColors.textSecondaryOf(context),
-                                      ),
-                                      const SizedBox(width: 3),
-                                      Text(
-                                        '${p.likesCount}',
-                                        style: TextStyle(
-                                          color: AppColors.textSecondaryOf(context),
-                                          fontSize: 10.5,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
+                      Flexible(
+                        child: Text(
+                          painting.artistDisplayName ?? 'Artyug Artist',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: AppColors.textPrimaryOf(context),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
+                      ),
+                      if (painting.artistIsVerified ?? false) ...[
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.verified_rounded,
+                          size: 16,
+                          color: AppColors.info,
+                        ),
+                      ],
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          '@$handle · ${painting.createdAt == null ? 'now' : _relativeTime(painting.createdAt!)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: AppColors.textTertiaryOf(context),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      Icon(
+                        Icons.more_horiz_rounded,
+                        size: 18,
+                        color: AppColors.textTertiaryOf(context),
                       ),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 4),
+                  Text(
+                    postText,
+                    maxLines: hasImage ? 3 : 5,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.textPrimaryOf(context),
+                      fontSize: 14,
+                      height: 1.35,
+                    ),
+                  ),
+                  if (categoryLabel != null) ...[
+                    const SizedBox(height: 8),
+                    _HomepageCategoryChip(label: categoryLabel),
+                  ],
+                  if (hasImage) ...[
+                    const SizedBox(height: 10),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: MarketplaceMediaFrame(
+                        imageUrl: painting.resolvedImageUrl,
+                        aspectRatio: 16 / 10,
+                        borderRadius: BorderRadius.zero,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      _ThreadAction(
+                        icon: Icons.chat_bubble_outline_rounded,
+                        label: painting.viewsCount > 0
+                            ? '${painting.viewsCount}'
+                            : '',
+                      ),
+                      const SizedBox(width: 24),
+                      _ThreadAction(
+                        icon: Icons.repeat_rounded,
+                        label: painting.purchasesCount > 0
+                            ? '${painting.purchasesCount}'
+                            : '',
+                      ),
+                      const SizedBox(width: 24),
+                      InkWell(
+                        borderRadius: BorderRadius.circular(999),
+                        onTap: onLike,
+                        child: _ThreadAction(
+                          icon: painting.isLikedByMe
+                              ? Icons.favorite_rounded
+                              : Icons.favorite_border_rounded,
+                          label: painting.likesCount > 0
+                              ? '${painting.likesCount}'
+                              : '',
+                          active: painting.isLikedByMe,
+                        ),
+                      ),
+                      const Spacer(),
+                      _ThreadAction(icon: Icons.share_outlined, label: ''),
+                    ],
+                  ),
+                ],
               ),
-            );
-          }).toList(),
-        );
-      },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ThreadAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool active;
+
+  const _ThreadAction({
+    required this.icon,
+    required this.label,
+    this.active = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color =
+        active ? AppColors.primary : AppColors.textTertiaryOf(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 18, color: color),
+        if (label.isNotEmpty) ...[
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+String? _homepageCategoryLabel(PaintingModel painting) {
+  final category = painting.category?.trim();
+  if (category != null && category.isNotEmpty) return category;
+  final medium = painting.medium?.trim();
+  if (medium != null && medium.isNotEmpty) return medium;
+  return null;
+}
+
+class _HomepageCategoryChip extends StatelessWidget {
+  final String label;
+
+  const _HomepageCategoryChip({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: AppColors.primary.withValues(alpha: 0.22),
+        ),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: AppColors.primary,
+          fontSize: 10.5,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 }
@@ -1690,6 +1863,10 @@ class _EcosystemArtworkCard extends StatelessWidget {
         ? painting.description!.trim()
         : '${(painting.medium ?? '').trim()} ${(painting.category ?? '').trim()}'
             .trim();
+    final categoryLabel = _homepageCategoryLabel(painting);
+    final buyLabel = painting.price != null
+        ? 'Buy now · Rs. ${painting.price!.toStringAsFixed(0)}'
+        : 'Buy now';
 
     return InkWell(
       borderRadius: BorderRadius.circular(14),
@@ -1727,6 +1904,10 @@ class _EcosystemArtworkCard extends StatelessWidget {
                       fontSize: 13.5,
                     ),
                   ),
+                  if (categoryLabel != null) ...[
+                    const SizedBox(height: 6),
+                    _HomepageCategoryChip(label: categoryLabel),
+                  ],
                   const SizedBox(height: 4),
                   if (description.isNotEmpty)
                     Text(
@@ -1747,7 +1928,9 @@ class _EcosystemArtworkCard extends StatelessWidget {
                         backgroundColor: AppColors.accentSoftOf(context),
                         foregroundImage: painting.resolvedArtistAvatarUrl !=
                                     null &&
-                                painting.resolvedArtistAvatarUrl!.trim().isNotEmpty
+                                painting.resolvedArtistAvatarUrl!
+                                    .trim()
+                                    .isNotEmpty
                             ? NetworkImage(painting.resolvedArtistAvatarUrl!)
                             : null,
                         child: Text(
@@ -1829,6 +2012,35 @@ class _EcosystemArtworkCard extends StatelessWidget {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        onTap?.call();
+                        context.push('/checkout/${painting.id}',
+                            extra: painting);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: AppColors.onPrimary,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        buyLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -1888,7 +2100,8 @@ class _MiniFeedEmpty extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: TextStyle(color: AppColors.textSecondaryOf(context), fontSize: 12.5),
+        style: TextStyle(
+            color: AppColors.textSecondaryOf(context), fontSize: 12.5),
       ),
     );
   }
@@ -1914,164 +2127,10 @@ class _GalleryDropGrid extends StatelessWidget {
           children: paintings.map((p) {
             return SizedBox(
               width: tileWidth,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(14),
-                onTap: () {
-                  onTap?.call(p.id);
-                  AnalyticsService.track('ecosystem_gallery_drop_tap', params: {'artwork_id': p.id});
-                  context.push('/artwork/${p.id}', extra: p);
-                },
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceOf(context),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.borderOf(context)),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      MarketplaceMediaFrame(
-                        imageUrl: p.resolvedImageUrl,
-                        aspectRatio: 1,
-                        borderRadius: BorderRadius.zero,
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              p.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: AppColors.textPrimaryOf(context),
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Row(
-                              children: [
-                                CircleAvatar(
-                                  radius: 9,
-                                  backgroundColor:
-                                      AppColors.accentSoftOf(context),
-                                  foregroundImage: p.resolvedArtistAvatarUrl !=
-                                              null &&
-                                          p.resolvedArtistAvatarUrl!
-                                              .trim()
-                                              .isNotEmpty
-                                      ? NetworkImage(
-                                          p.resolvedArtistAvatarUrl!,
-                                        )
-                                      : null,
-                                  child: Text(
-                                    ((p.artistDisplayName ?? 'A')
-                                                .trim()
-                                                .isNotEmpty
-                                            ? (p.artistDisplayName ?? 'A')
-                                                .trim()
-                                                .substring(0, 1)
-                                            : 'A')
-                                        .toUpperCase(),
-                                    style: TextStyle(
-                                      color: AppColors.accentOf(context),
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    p.artistDisplayName ?? 'Artyug Artist',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: AppColors.textSecondaryOf(context),
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                                if (p.artistIsVerified ?? false)
-                                  const Padding(
-                                    padding: EdgeInsets.only(left: 4),
-                                    child: Icon(
-                                      Icons.verified_rounded,
-                                      size: 13,
-                                      color: AppColors.info,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            if ((p.description ?? '').trim().isNotEmpty ||
-                                (p.medium ?? '').trim().isNotEmpty ||
-                                (p.category ?? '').trim().isNotEmpty) ...[
-                              const SizedBox(height: 5),
-                              Text(
-                                (p.description ?? '').trim().isNotEmpty
-                                    ? p.description!.trim()
-                                    : '${(p.medium ?? '').trim()} ${(p.category ?? '').trim()}'
-                                        .trim(),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: AppColors.textSecondaryOf(context),
-                                  fontSize: 11.5,
-                                  height: 1.3,
-                                ),
-                              ),
-                            ],
-                            const SizedBox(height: 5),
-                            Text(
-                              p.createdAt == null ? 'Just now' : _relativeTime(p.createdAt!),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: AppColors.textTertiaryOf(context),
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Row(
-                              children: [
-                                InkWell(
-                                  borderRadius: BorderRadius.circular(999),
-                                  onTap: () => onLike?.call(p.id),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        p.isLikedByMe
-                                            ? Icons.favorite_rounded
-                                            : Icons.favorite_border_rounded,
-                                        size: 15,
-                                        color: p.isLikedByMe
-                                            ? AppColors.primary
-                                            : AppColors.textSecondaryOf(context),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        '${p.likesCount}',
-                                        style: TextStyle(
-                                          color: AppColors.textSecondaryOf(context),
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+              child: _GalleryDropCard(
+                painting: p,
+                onLike: onLike,
+                onTap: onTap,
               ),
             );
           }).toList(),
@@ -2137,7 +2196,8 @@ class _CompactArtworkRail extends StatelessWidget {
     final width = MediaQuery.sizeOf(context).width;
     final cardWidth = width < 420 ? 272.0 : 288.0;
     if (paintings.isEmpty) {
-      return _SmartEmptyCard(label: emptyLabel, cta: 'Explore', onTap: onOpenExplore);
+      return _SmartEmptyCard(
+          label: emptyLabel, cta: 'Explore', onTap: onOpenExplore);
     }
     return SizedBox(
       height: 324,
@@ -2153,7 +2213,8 @@ class _CompactArtworkRail extends StatelessWidget {
               painting: p,
               isLiked: p.isLikedByMe,
               showBuyButton: true,
-              onTap: () => AnalyticsService.track('home_rail_artwork_tap', params: {'section': 'compact', 'artwork_id': p.id}),
+              onTap: () => AnalyticsService.track('home_rail_artwork_tap',
+                  params: {'section': 'compact', 'artwork_id': p.id}),
             ),
           );
         },
@@ -2167,13 +2228,18 @@ class _LiveAuctionsNowRail extends StatelessWidget {
   final List<Map<String, dynamic>> rows;
   final List<PaintingModel> paintings;
 
-  const _LiveAuctionsNowRail({required this.loading, required this.rows, required this.paintings});
+  const _LiveAuctionsNowRail(
+      {required this.loading, required this.rows, required this.paintings});
 
   @override
   Widget build(BuildContext context) {
-    if (loading) return const SizedBox(height: 110, child: MarketplaceShimmer());
+    if (loading)
+      return const SizedBox(height: 110, child: MarketplaceShimmer());
     if (rows.isEmpty) {
-      return _SmartEmptyCard(label: 'No live auctions right now.', cta: 'Browse auctions', onTap: () => context.push('/auctions'));
+      return _SmartEmptyCard(
+          label: 'No live auctions right now.',
+          cta: 'Browse auctions',
+          onTap: () => context.push('/auctions'));
     }
     return SizedBox(
       height: 126,
@@ -2184,7 +2250,10 @@ class _LiveAuctionsNowRail extends StatelessWidget {
         itemBuilder: (context, i) {
           final a = rows[i];
           final pid = a['painting_id']?.toString();
-          final p = paintings.where((e) => e.id == pid).cast<PaintingModel?>().firstWhere((e) => e != null, orElse: () => null);
+          final p = paintings
+              .where((e) => e.id == pid)
+              .cast<PaintingModel?>()
+              .firstWhere((e) => e != null, orElse: () => null);
           final endAt = DateTime.tryParse((a['end_time'] ?? '').toString());
           final remain = endAt == null ? '--' : _relativeTime(endAt);
           final high = (a['current_highest_bid'] as num?)?.toDouble() ?? 0;
@@ -2232,21 +2301,37 @@ class _LiveAuctionsNowRail extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(p?.title ?? 'Live auction', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.textPrimaryOf(context), fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 6),
-                  Text('Current bid: ₹${high.toStringAsFixed(0)}', style: TextStyle(color: AppColors.textSecondaryOf(context), fontSize: 12)),
-                  const SizedBox(height: 4),
-                  Text('Ends in $remain', style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w700)),
-                  const Spacer(),
-                  ElevatedButton(
-                    onPressed: () {
-                      AnalyticsService.track('home_live_auction_quick_bid_tap', params: {'auction_id': a['id']?.toString()});
-                      context.push('/auction/${a['id']}');
-                    },
-                    child: const Text('Quick Bid'),
-                  ),
-                ]),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(p?.title ?? 'Live auction',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color: AppColors.textPrimaryOf(context),
+                              fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 6),
+                      Text('Current bid: ₹${high.toStringAsFixed(0)}',
+                          style: TextStyle(
+                              color: AppColors.textSecondaryOf(context),
+                              fontSize: 12)),
+                      const SizedBox(height: 4),
+                      Text('Ends in $remain',
+                          style: const TextStyle(
+                              color: AppColors.primary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700)),
+                      const Spacer(),
+                      ElevatedButton(
+                        onPressed: () {
+                          AnalyticsService.track(
+                              'home_live_auction_quick_bid_tap',
+                              params: {'auction_id': a['id']?.toString()});
+                          context.push('/auction/${a['id']}');
+                        },
+                        child: const Text('Quick Bid'),
+                      ),
+                    ]),
               ),
             ]),
           );
@@ -2261,7 +2346,8 @@ class _SmartEmptyCard extends StatelessWidget {
   final String cta;
   final VoidCallback onTap;
 
-  const _SmartEmptyCard({required this.label, required this.cta, required this.onTap});
+  const _SmartEmptyCard(
+      {required this.label, required this.cta, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -2274,7 +2360,11 @@ class _SmartEmptyCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Expanded(child: Text(label, style: TextStyle(color: AppColors.textSecondaryOf(context), fontSize: 13))),
+          Expanded(
+              child: Text(label,
+                  style: TextStyle(
+                      color: AppColors.textSecondaryOf(context),
+                      fontSize: 13))),
           TextButton(onPressed: onTap, child: Text(cta)),
         ],
       ),
@@ -2384,7 +2474,7 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-class _FeaturedArtRail extends StatelessWidget {
+class _FeaturedArtRail extends StatefulWidget {
   final double horizontalPadding;
   final List<PaintingModel> paintings;
 
@@ -2394,10 +2484,97 @@ class _FeaturedArtRail extends StatelessWidget {
   });
 
   @override
+  State<_FeaturedArtRail> createState() => _FeaturedArtRailState();
+}
+
+class _FeaturedArtRailState extends State<_FeaturedArtRail> {
+  static const double _cardWidth = 310;
+  static const double _cardGap = 12;
+  static const Duration _autoStepEvery = Duration(seconds: 3);
+  static const Duration _autoStepDuration = Duration(milliseconds: 560);
+
+  final ScrollController _controller = ScrollController();
+  Timer? _autoTimer;
+  int _activeIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _startAutoScroll();
+  }
+
+  @override
+  void didUpdateWidget(covariant _FeaturedArtRail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.paintings.length != widget.paintings.length) {
+      _activeIndex = 0;
+      _restartAutoScroll();
+    }
+  }
+
+  @override
+  void dispose() {
+    _autoTimer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _startAutoScroll() {
+    _autoTimer?.cancel();
+    if (widget.paintings.length <= 1) return;
+    _autoTimer = Timer.periodic(_autoStepEvery, (_) => _goNext());
+  }
+
+  void _restartAutoScroll() {
+    _autoTimer?.cancel();
+    Future<void>.delayed(const Duration(seconds: 4), () {
+      if (!mounted) return;
+      _startAutoScroll();
+    });
+  }
+
+  void _goNext() {
+    if (!_controller.hasClients || widget.paintings.length <= 1) return;
+    final next = (_activeIndex + 1) % widget.paintings.length;
+    final offset = next * (_cardWidth + _cardGap);
+    _controller.animateTo(
+      offset,
+      duration: _autoStepDuration,
+      curve: Curves.easeOutCubic,
+    );
+    if (mounted) setState(() => _activeIndex = next);
+  }
+
+  bool _onScroll(ScrollNotification n) {
+    if (widget.paintings.isEmpty) return false;
+    if (n is ScrollStartNotification) {
+      _autoTimer?.cancel();
+    } else if (n is ScrollUpdateNotification || n is ScrollEndNotification) {
+      if (_controller.hasClients) {
+        final itemExtent = _cardWidth + _cardGap;
+        final idx = (_controller.offset / itemExtent).round();
+        final clamped = idx.clamp(0, widget.paintings.length - 1);
+        if (clamped != _activeIndex && mounted) {
+          setState(() => _activeIndex = clamped);
+        }
+      }
+      if (n is ScrollEndNotification) {
+        _restartAutoScroll();
+      }
+    }
+    return false;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (paintings.isEmpty) {
+    if (widget.paintings.isEmpty) {
       return Padding(
-        padding: EdgeInsets.fromLTRB(horizontalPadding, 12, horizontalPadding, 0),
+        padding: EdgeInsets.fromLTRB(
+          widget.horizontalPadding,
+          12,
+          widget.horizontalPadding,
+          0,
+        ),
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -2416,72 +2593,395 @@ class _FeaturedArtRail extends StatelessWidget {
       );
     }
 
-    return SizedBox(
-      height: 228,
-      child: ListView.separated(
-        padding: EdgeInsets.fromLTRB(horizontalPadding, 12, horizontalPadding, 0),
-        scrollDirection: Axis.horizontal,
-        itemCount: paintings.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 12),
-        itemBuilder: (context, index) {
-          final p = paintings[index];
-          final cover = p.resolvedImageUrl.trim();
-          return GestureDetector(
-            onTap: () => context.push('/artwork/${p.id}', extra: p),
-            child: Container(
-              width: 310,
-              decoration: BoxDecoration(
-                color: AppColors.surfaceOf(context),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppColors.borderOf(context)),
+    return Column(
+      children: [
+        SizedBox(
+          height: 236,
+          child: NotificationListener<ScrollNotification>(
+            onNotification: _onScroll,
+            child: ListView.separated(
+              controller: _controller,
+              padding: EdgeInsets.fromLTRB(
+                widget.horizontalPadding,
+                12,
+                widget.horizontalPadding,
+                0,
               ),
-              clipBehavior: Clip.antiAlias,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  MarketplaceMediaFrame(
-                    imageUrl: cover,
-                    aspectRatio: 16 / 9,
-                    borderRadius: BorderRadius.zero,
-                    showGradientOverlay: true,
-                  ),
-                  Positioned(
-                    left: 14,
-                    right: 14,
-                    bottom: 12,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              physics: const BouncingScrollPhysics(),
+              scrollDirection: Axis.horizontal,
+              itemCount: widget.paintings.length,
+              separatorBuilder: (_, __) => const SizedBox(width: _cardGap),
+              itemBuilder: (context, index) {
+                final p = widget.paintings[index];
+                final cover = p.resolvedImageUrl.trim();
+                final categoryLabel = _homepageCategoryLabel(p);
+                return GestureDetector(
+                  onTap: () => context.push('/artwork/${p.id}', extra: p),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 260),
+                    curve: Curves.easeOut,
+                    width: _cardWidth,
+                    transform: Matrix4.identity()
+                      ..scale(index == _activeIndex ? 1.0 : 0.985),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceOf(context),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: index == _activeIndex
+                            ? AppColors.primary.withValues(alpha: 0.45)
+                            : AppColors.borderOf(context),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(
+                            alpha: index == _activeIndex ? 0.26 : 0.16,
+                          ),
+                          blurRadius: index == _activeIndex ? 22 : 14,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: Stack(
+                      fit: StackFit.expand,
                       children: [
-                        Text(
-                          p.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
+                        MarketplaceMediaFrame(
+                          imageUrl: cover,
+                          aspectRatio: 16 / 9,
+                          borderRadius: BorderRadius.zero,
+                          showGradientOverlay: true,
+                        ),
+                        Positioned.fill(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.transparent,
+                                  Colors.black.withValues(alpha: 0.72),
+                                ],
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                              ),
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          p.artistDisplayName ?? 'Artyug Artist',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Color(0xFFE9E9EC),
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w600,
+                        if (categoryLabel != null)
+                          Positioned(
+                            top: 14,
+                            left: 14,
+                            child: _HomepageCategoryChip(label: categoryLabel),
+                          ),
+                        Positioned(
+                          left: 14,
+                          right: 14,
+                          bottom: 12,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                p.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                p.artistDisplayName ?? 'Artyug Artist',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Color(0xFFE9E9EC),
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
                   ),
+                );
+              },
+            ),
+          ),
+        ),
+        if (widget.paintings.length > 1) ...[
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(widget.paintings.length, (index) {
+              final active = index == _activeIndex;
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                width: active ? 18 : 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: active
+                      ? AppColors.primary
+                      : AppColors.textTertiaryOf(context)
+                          .withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              );
+            }),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _GalleryDropCard extends StatefulWidget {
+  final PaintingModel painting;
+  final ValueChanged<String>? onTap;
+  final ValueChanged<String>? onLike;
+
+  const _GalleryDropCard({
+    required this.painting,
+    this.onTap,
+    this.onLike,
+  });
+
+  @override
+  State<_GalleryDropCard> createState() => _GalleryDropCardState();
+}
+
+class _GalleryDropCardState extends State<_GalleryDropCard> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.painting;
+    final description = (p.description ?? '').trim().isNotEmpty
+        ? p.description!.trim()
+        : '${(p.medium ?? '').trim()} ${(p.category ?? '').trim()}'.trim();
+    final canExpand = description.length > 80;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () {
+        widget.onTap?.call(p.id);
+        AnalyticsService.track('ecosystem_gallery_drop_tap',
+            params: {'artwork_id': p.id});
+        context.push('/artwork/${p.id}', extra: p);
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.surfaceOf(context),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.borderOf(context)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            MarketplaceMediaFrame(
+              imageUrl: p.resolvedImageUrl,
+              aspectRatio: 1.06,
+              borderRadius: BorderRadius.zero,
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    p.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.textPrimaryOf(context),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 9,
+                        backgroundColor: AppColors.accentSoftOf(context),
+                        foregroundImage: p.resolvedArtistAvatarUrl != null &&
+                                p.resolvedArtistAvatarUrl!.trim().isNotEmpty
+                            ? NetworkImage(p.resolvedArtistAvatarUrl!)
+                            : null,
+                        child: Text(
+                          ((p.artistDisplayName ?? 'A').trim().isNotEmpty
+                                  ? (p.artistDisplayName ?? 'A')
+                                      .trim()
+                                      .substring(0, 1)
+                                  : 'A')
+                              .toUpperCase(),
+                          style: TextStyle(
+                            color: AppColors.accentOf(context),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          p.artistDisplayName ?? 'Artyug Artist',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: AppColors.textSecondaryOf(context),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      if (p.artistIsVerified ?? false)
+                        const Padding(
+                          padding: EdgeInsets.only(left: 4),
+                          child: Icon(
+                            Icons.verified_rounded,
+                            size: 13,
+                            color: AppColors.info,
+                          ),
+                        ),
+                    ],
+                  ),
+                  if (description.isNotEmpty) ...[
+                    const SizedBox(height: 5),
+                    Text(
+                      description,
+                      maxLines: _expanded ? null : 2,
+                      overflow: _expanded
+                          ? TextOverflow.visible
+                          : TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.textSecondaryOf(context),
+                        fontSize: 11.5,
+                        height: 1.3,
+                      ),
+                    ),
+                    if (canExpand)
+                      TextButton(
+                        onPressed: () => setState(() => _expanded = !_expanded),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.only(top: 2),
+                          minimumSize: const Size(0, 0),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        child: Text(_expanded ? 'Show less' : 'Show more'),
+                      ),
+                  ],
+                  const SizedBox(height: 5),
+                  Text(
+                    p.createdAt == null
+                        ? 'Just now'
+                        : _relativeTime(p.createdAt!),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.textTertiaryOf(context),
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      InkWell(
+                        borderRadius: BorderRadius.circular(999),
+                        onTap: () => widget.onLike?.call(p.id),
+                        child: Row(
+                          children: [
+                            Icon(
+                              p.isLikedByMe
+                                  ? Icons.favorite_rounded
+                                  : Icons.favorite_border_rounded,
+                              size: 15,
+                              color: p.isLikedByMe
+                                  ? AppColors.primary
+                                  : AppColors.textSecondaryOf(context),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${p.likesCount}',
+                              style: TextStyle(
+                                color: AppColors.textSecondaryOf(context),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
-          );
-        },
+          ],
+        ),
       ),
+    );
+  }
+}
+
+class _PhotographyWall extends StatelessWidget {
+  final double horizontalPadding;
+  final List<PaintingModel> paintings;
+
+  const _PhotographyWall({
+    required this.horizontalPadding,
+    required this.paintings,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final contentWidth = constraints.maxWidth - (horizontalPadding * 2);
+        final columns = contentWidth >= 1120
+            ? 4
+            : contentWidth >= 780
+                ? 3
+                : 2;
+        const spacing = 22.0;
+        final tileWidth = (contentWidth - ((columns - 1) * spacing)) / columns;
+
+        return Padding(
+          padding:
+              EdgeInsets.fromLTRB(horizontalPadding, 14, horizontalPadding, 4),
+          child: Wrap(
+            spacing: spacing,
+            runSpacing: 34,
+            children: paintings.map((painting) {
+              return SizedBox(
+                width: tileWidth,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(6),
+                  onTap: () =>
+                      context.push('/artwork/${painting.id}', extra: painting),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: MarketplaceMediaFrame(
+                          imageUrl: painting.resolvedImageUrl,
+                          aspectRatio: 1.18,
+                          borderRadius: BorderRadius.zero,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        );
+      },
     );
   }
 }
@@ -3171,7 +3671,10 @@ class _ArtistItem {
   final String avatar;
 
   const _ArtistItem(
-      {required this.id, required this.name, required this.stat, required this.avatar});
+      {required this.id,
+      required this.name,
+      required this.stat,
+      required this.avatar});
 }
 
 class _CommunityItem {
@@ -3401,7 +3904,6 @@ class _EcosystemShowMoreDialogState extends State<_EcosystemShowMoreDialog> {
   }
 }
 
-
 /// A [CircleAvatar] that gracefully falls back to an initial-letter placeholder
 /// when the network image URL is empty or fails to load.
 class _AvatarWithFallback extends StatelessWidget {
@@ -3463,4 +3965,3 @@ class _InitialLabel extends StatelessWidget {
     );
   }
 }
-

@@ -8,11 +8,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/painting.dart';
 import '../../providers/auth_provider.dart';
-import '../../providers/app_mode_provider.dart';
 import '../../providers/feed_provider.dart';
 import '../../repositories/painting_repository.dart';
-import '../../repositories/order_repository.dart';
-import '../../services/payments/payment_service.dart';
 import '../../widgets/feed/marketplace_media.dart';
 
 class ArtworkDetailScreen extends StatefulWidget {
@@ -968,101 +965,7 @@ class _ActionZone extends StatelessWidget {
       return;
     }
 
-    // In demo mode: delegate to CheckoutScreen which handles demo wallet
-    final isLive = ctx.read<AppModeProvider>().isLiveMode;
-    if (!isLive) {
-      ctx.push('/checkout/${painting.id}', extra: painting);
-      return;
-    }
-
-    // ── Live mode: Razorpay → Solana mainnet memo attestation ────────────────
-    // Step 1: Show spinner while Edge Function creates the Razorpay order
-    showDialog(
-      context: ctx,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
-
-    try {
-      final result = await PaymentService.initiateRazorpayPayment(
-        artworkId: painting.id,
-        amountInr: amountInr,
-        artworkTitle: painting.title,
-        contactEmail: auth.user?.email,
-      );
-
-      if (!ctx.mounted) return;
-      Navigator.of(ctx, rootNavigator: true).pop(); // dismiss order-creation spinner
-
-      if (result == null || !result.success) {
-        ScaffoldMessenger.of(ctx).showSnackBar(
-          SnackBar(
-            content: Text(result?.errorMessage ??
-                'Payment cancelled or failed. Please try again.'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-        return;
-      }
-
-      // Step 2: Payment succeeded — record order + Solana mainnet memo
-      if (!ctx.mounted) return;
-      showDialog(
-        context: ctx,
-        barrierDismissible: false,
-        builder: (_) => const Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text(
-                'Recording on blockchain\u2026',
-                style: TextStyle(color: Colors.white, fontSize: 14),
-              ),
-            ],
-          ),
-        ),
-      );
-
-      OrderResult orderResult;
-      try {
-        orderResult = await OrderRepository.createLiveOrder(
-          paintingId: painting.id,
-          razorpayOrderId: result.razorpayOrderId ?? '',
-          razorpayPaymentId: result.razorpayPaymentId ?? '',
-          amountPaid: amountInr,
-        );
-      } catch (e) {
-        if (ctx.mounted) {
-          Navigator.of(ctx, rootNavigator: true).pop();
-          ScaffoldMessenger.of(ctx).showSnackBar(
-            SnackBar(
-              content: Text('Payment received but order recording failed: $e'),
-              backgroundColor: AppColors.warning,
-              duration: const Duration(seconds: 6),
-            ),
-          );
-        }
-        return;
-      }
-
-      if (!ctx.mounted) return;
-      Navigator.of(ctx, rootNavigator: true).pop(); // dismiss blockchain loader
-
-      // Step 3: Navigate to confirmation with certificate + Solscan URL
-      ctx.push('/order-confirm', extra: orderResult);
-    } catch (e) {
-      if (ctx.mounted) {
-        Navigator.of(ctx, rootNavigator: true).pop();
-        ScaffoldMessenger.of(ctx).showSnackBar(
-          SnackBar(
-            content: Text('Checkout error: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
-    }
+    ctx.push('/checkout/${painting.id}', extra: painting);
   }
 }
 

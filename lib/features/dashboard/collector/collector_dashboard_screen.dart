@@ -1,4 +1,4 @@
-﻿import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -70,16 +70,19 @@ class _CollectorDashboardScreenState extends State<CollectorDashboardScreen>
         return;
       }
 
-      final guilds = memberships.map((m) {
-        final c = (m['communities'] as Map<String, dynamic>?) ?? const {};
-        return <String, dynamic>{
-          'id': c['id']?.toString() ?? m['community_id']?.toString() ?? '',
-          'name': (c['name'] as String?)?.trim(),
-          'slug': c['slug']?.toString(),
-          'avatar_url': (c['avatar_url'] as String?)?.trim(),
-          'role': (m['role'] as String?)?.trim() ?? 'member',
-        };
-      }).where((g) => (g['id'] as String).isNotEmpty).toList();
+      final guilds = memberships
+          .map((m) {
+            final c = (m['communities'] as Map<String, dynamic>?) ?? const {};
+            return <String, dynamic>{
+              'id': c['id']?.toString() ?? m['community_id']?.toString() ?? '',
+              'name': (c['name'] as String?)?.trim(),
+              'slug': c['slug']?.toString(),
+              'avatar_url': (c['avatar_url'] as String?)?.trim(),
+              'role': (m['role'] as String?)?.trim() ?? 'member',
+            };
+          })
+          .where((g) => (g['id'] as String).isNotEmpty)
+          .toList();
 
       if (!mounted) return;
       setState(() {
@@ -128,121 +131,160 @@ class _CollectorDashboardScreenState extends State<CollectorDashboardScreen>
     final border = AppColors.borderOf(context);
     final isDemo = context.watch<AppModeProvider>().isDemoMode;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (Navigator.of(context).canPop())
-          Padding(
-            padding: const EdgeInsets.fromLTRB(4, 8, 8, 0),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: IconButton(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: Icon(
-                  Icons.arrow_back_rounded,
-                  color: AppColors.textPrimaryOf(context),
-                ),
-                style: IconButton.styleFrom(
-                  backgroundColor: AppColors.surfaceOf(context).withValues(
-                    alpha: 0.6,
+    final tabBar = PreferredSize(
+      preferredSize: const Size.fromHeight(kTextTabBarHeight),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              AppColors.surfaceOf(context).withValues(alpha: 0.86),
+              AppColors.surfaceMutedOf(context).withValues(alpha: 0.72),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          border: Border(
+            bottom: BorderSide(color: border),
+          ),
+        ),
+        child: TabBar(
+          controller: _tabs,
+          labelColor: AppColors.primary,
+          unselectedLabelColor: AppColors.textSecondaryOf(context),
+          indicatorColor: AppColors.primary,
+          indicatorWeight: 3,
+          indicatorSize: TabBarIndicatorSize.tab,
+          dividerColor: Colors.transparent,
+          labelStyle: const TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 13,
+            letterSpacing: 0.4,
+          ),
+          unselectedLabelStyle: const TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+          ),
+          tabs: const [
+            Tab(text: 'Collection'),
+            Tab(text: 'Vault'),
+            Tab(text: 'Saved'),
+          ],
+        ),
+      ),
+    );
+
+    return NestedScrollView(
+      headerSliverBuilder: (context, innerBoxIsScrolled) => [
+        SliverToBoxAdapter(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (Navigator.of(context).canPop())
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 8, 8, 0),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: Icon(
+                        Icons.arrow_back_rounded,
+                        color: AppColors.textPrimaryOf(context),
+                      ),
+                      style: IconButton.styleFrom(
+                        backgroundColor:
+                            AppColors.surfaceOf(context).withValues(
+                          alpha: 0.6,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
+              _PortfolioHero(
+                profile: profile,
+                totalSpent: s.totalSpent,
+                owned: s.ownedArtworks,
+                certificates: s.certificatesCount,
+                showDemoWallet: isDemo,
               ),
-            ),
-          ),
-        _PortfolioHero(
-          profile: profile,
-          totalSpent: s.totalSpent,
-          owned: s.ownedArtworks,
-          certificates: s.certificatesCount,
-          showDemoWallet: isDemo,
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _CollectorQuickAction(
-                icon: Icons.storefront_outlined,
-                label: 'Marketplace',
-                onTap: () => context.push('/shop'),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _CollectorQuickAction(
+                      icon: Icons.storefront_outlined,
+                      label: 'Marketplace',
+                      onTap: () => context.push('/shop'),
+                    ),
+                    _CollectorQuickAction(
+                      icon: Icons.gavel_rounded,
+                      label: 'Bid History',
+                      onTap: () => context.push('/auctions'),
+                    ),
+                    _CollectorQuickAction(
+                      icon: Icons.verified_user_outlined,
+                      label: 'Verify',
+                      onTap: () => context.push('/authenticity-center'),
+                    ),
+                    _CollectorQuickAction(
+                      icon: Icons.person_search_outlined,
+                      label: 'Artists',
+                      onTap: () => context.push('/search?q=artist'),
+                    ),
+                  ],
+                ),
               ),
-              _CollectorQuickAction(
-                icon: Icons.gavel_rounded,
-                label: 'Bid History',
-                onTap: () => context.push('/auctions'),
-              ),
-              _CollectorQuickAction(
-                icon: Icons.verified_user_outlined,
-                label: 'Verify',
-                onTap: () => context.push('/authenticity-center'),
-              ),
-              _CollectorQuickAction(
-                icon: Icons.person_search_outlined,
-                label: 'Artists',
-                onTap: () => context.push('/search?q=artist'),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                child: _MyStudiosQuickModule(
+                  studios: _joinedGuilds,
+                  loading: _guildsLoading,
+                ),
               ),
             ],
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-          child: _MyStudiosQuickModule(
-            studios: _joinedGuilds,
-            loading: _guildsLoading,
-          ),
-        ),
-        Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                AppColors.surfaceOf(context).withValues(alpha: 0.86),
-                AppColors.surfaceMutedOf(context).withValues(alpha: 0.72),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            border: Border(
-              bottom: BorderSide(color: border),
-            ),
-          ),
-          child: TabBar(
-            controller: _tabs,
-            labelColor: AppColors.primary,
-            unselectedLabelColor: AppColors.textSecondaryOf(context),
-            indicatorColor: AppColors.primary,
-            indicatorWeight: 3,
-            indicatorSize: TabBarIndicatorSize.tab,
-            dividerColor: Colors.transparent,
-            labelStyle: const TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 13,
-              letterSpacing: 0.4,
-            ),
-            unselectedLabelStyle: const TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
-            ),
-            tabs: const [
-              Tab(text: 'Collection'),
-              Tab(text: 'Vault'),
-              Tab(text: 'Saved'),
-            ],
-          ),
-        ),
-        Expanded(
-          child: TabBarView(
-            controller: _tabs,
-            children: [
-              _PurchasesTab(purchases: s.myPurchases),
-              _VaultTab(certificates: s.myCertificates),
-              const _SavedTab(),
-            ],
-          ),
+        SliverPersistentHeader(
+          pinned: true,
+          delegate: _CollectorTabBarHeaderDelegate(tabBar),
         ),
       ],
+      body: TabBarView(
+        controller: _tabs,
+        children: [
+          _PurchasesTab(purchases: s.myPurchases),
+          _VaultTab(certificates: s.myCertificates),
+          const _SavedTab(),
+        ],
+      ),
     );
+  }
+}
+
+class _CollectorTabBarHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final PreferredSizeWidget child;
+
+  const _CollectorTabBarHeaderDelegate(this.child);
+
+  @override
+  double get minExtent => child.preferredSize.height;
+
+  @override
+  double get maxExtent => child.preferredSize.height;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return child;
+  }
+
+  @override
+  bool shouldRebuild(covariant _CollectorTabBarHeaderDelegate oldDelegate) {
+    return oldDelegate.child != child;
   }
 }
 
@@ -365,7 +407,7 @@ class _MyStudiosQuickModule extends StatelessWidget {
                 children: [
                   const Expanded(
                     child: Text(
-                       'Join guilds to build your collector community feed.',
+                      'Join guilds to build your collector community feed.',
                       style: TextStyle(
                         color: AppColors.textSecondary,
                         fontSize: 12.5,
@@ -375,8 +417,8 @@ class _MyStudiosQuickModule extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   OutlinedButton(
-                     onPressed: () => context.push('/guild'),
-                     child: const Text('Find guilds'),
+                    onPressed: () => context.push('/guild'),
+                    child: const Text('Find guilds'),
                   ),
                 ],
               ),
@@ -389,56 +431,58 @@ class _MyStudiosQuickModule extends StatelessWidget {
                 itemCount: studios.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 8),
                 itemBuilder: (_, i) {
-                final studio = studios[i];
-                final name = (studio['name'] as String?)?.trim().isNotEmpty == true
-                    ? (studio['name'] as String).trim()
-                     : 'Guild';
-                final slug = studio['slug']?.toString();
-                final avatar = (studio['avatar_url'] as String?)?.trim();
-                return ActionChip(
-                  avatar: CircleAvatar(
-                    radius: 10,
-                    backgroundColor: AppColors.primary.withValues(alpha: 0.2),
-                    backgroundImage: avatar != null && avatar.isNotEmpty
-                        ? CachedNetworkImageProvider(avatar)
-                        : null,
-                    child: (avatar == null || avatar.isEmpty)
-                        ? Text(
-                            name.substring(0, 1).toUpperCase(),
-                            style: const TextStyle(
-                              color: AppColors.primary,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          )
-                        : null,
-                  ),
-                  label: Text(
-                    name,
-                    style: TextStyle(
-                      color: AppColors.textPrimaryOf(context),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                  final studio = studios[i];
+                  final name =
+                      (studio['name'] as String?)?.trim().isNotEmpty == true
+                          ? (studio['name'] as String).trim()
+                          : 'Guild';
+                  final slug = studio['slug']?.toString();
+                  final avatar = (studio['avatar_url'] as String?)?.trim();
+                  return ActionChip(
+                    avatar: CircleAvatar(
+                      radius: 10,
+                      backgroundColor: AppColors.primary.withValues(alpha: 0.2),
+                      backgroundImage: avatar != null && avatar.isNotEmpty
+                          ? CachedNetworkImageProvider(avatar)
+                          : null,
+                      child: (avatar == null || avatar.isEmpty)
+                          ? Text(
+                              name.substring(0, 1).toUpperCase(),
+                              style: const TextStyle(
+                                color: AppColors.primary,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            )
+                          : null,
                     ),
-                  ),
-                  onPressed: () {
-                     AnalyticsService.track('collector_guild_chip_tap', params: {
-                       'slug': slug ?? '',
-                       'guild_id': studio['id']?.toString() ?? '',
-                     });
-                     final guildId = studio['id']?.toString() ?? '';
-                     if (guildId.isNotEmpty) {
-                       context.push('/community-detail/$guildId');
-                     } else {
-                       context.push('/guild');
-                     }
-                   },
-                  backgroundColor: AppColors.surfaceOf(context),
-                  side: BorderSide(color: AppColors.borderOf(context)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                );
+                    label: Text(
+                      name,
+                      style: TextStyle(
+                        color: AppColors.textPrimaryOf(context),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    onPressed: () {
+                      AnalyticsService.track('collector_guild_chip_tap',
+                          params: {
+                            'slug': slug ?? '',
+                            'guild_id': studio['id']?.toString() ?? '',
+                          });
+                      final guildId = studio['id']?.toString() ?? '';
+                      if (guildId.isNotEmpty) {
+                        context.push('/community-detail/$guildId');
+                      } else {
+                        context.push('/guild');
+                      }
+                    },
+                    backgroundColor: AppColors.surfaceOf(context),
+                    side: BorderSide(color: AppColors.borderOf(context)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  );
                 },
               ),
             ),
@@ -472,7 +516,6 @@ class _StudiosChipSkeletonRow extends StatelessWidget {
   }
 }
 
-
 class _PortfolioHero extends StatelessWidget {
   final ProfileModel? profile;
   final double totalSpent;
@@ -492,9 +535,9 @@ class _PortfolioHero extends StatelessWidget {
   Widget build(BuildContext context) {
     final name = profile?.displayNameOrUsername ?? 'Collector';
     final initials = profile?.initials ?? '?';
-    final avatarUrl =
-        SupabaseMediaUrl.resolve(profile?.profilePictureUrl);
-    final inr = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+    final avatarUrl = SupabaseMediaUrl.resolve(profile?.profilePictureUrl);
+    final inr =
+        NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
     return Container(
       width: double.infinity,
@@ -567,10 +610,14 @@ class _PortfolioHero extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Row(children: const [
-                        Icon(Icons.diamond_outlined, color: AppColors.primary, size: 13),
+                        Icon(Icons.diamond_outlined,
+                            color: AppColors.primary, size: 13),
                         SizedBox(width: 4),
-                        Text('Art Collector', style: TextStyle(
-                          color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w700)),
+                        Text('Art Collector',
+                            style: TextStyle(
+                                color: AppColors.primary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700)),
                       ]),
                     ],
                   ),
@@ -654,7 +701,8 @@ class _PortfolioHero extends StatelessWidget {
                               },
                               style: TextButton.styleFrom(
                                 foregroundColor: AppColors.warning,
-                                padding: const EdgeInsets.symmetric(horizontal: 10),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 10),
                                 visualDensity: VisualDensity.compact,
                               ),
                               child: const Text(
@@ -698,8 +746,7 @@ class _PortfolioHero extends StatelessWidget {
                             minHeight: 6,
                             backgroundColor:
                                 Colors.white.withValues(alpha: 0.08),
-                            valueColor:
-                                const AlwaysStoppedAnimation<Color>(
+                            valueColor: const AlwaysStoppedAnimation<Color>(
                               AppColors.warning,
                             ),
                           ),
@@ -1443,7 +1490,8 @@ class _PurchaseListRow extends StatelessWidget {
                               color: AppColors.success.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(
-                                color: AppColors.success.withValues(alpha: 0.35),
+                                color:
+                                    AppColors.success.withValues(alpha: 0.35),
                               ),
                             ),
                             child: const Row(
@@ -1476,7 +1524,8 @@ class _PurchaseListRow extends StatelessWidget {
                               color: AppColors.warning.withValues(alpha: 0.14),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(
-                                color: AppColors.warning.withValues(alpha: 0.45),
+                                color:
+                                    AppColors.warning.withValues(alpha: 0.45),
                               ),
                             ),
                             child: const Text(
@@ -1595,8 +1644,7 @@ class _VaultTab extends StatelessWidget {
       return _EmptyPortfolio(
         icon: Icons.verified_user_outlined,
         title: 'Vault is empty',
-        subtitle:
-            'Certificates for authenticated purchases will appear here.',
+        subtitle: 'Certificates for authenticated purchases will appear here.',
         actionLabel: 'Browse artworks',
         onAction: () => context.push('/explore'),
       );
@@ -1687,7 +1735,9 @@ class _CertificateTile extends StatelessWidget {
                     Row(
                       children: [
                         Icon(
-                          cert.isBlockchainAnchored ? Icons.link : Icons.shield_outlined,
+                          cert.isBlockchainAnchored
+                              ? Icons.link
+                              : Icons.shield_outlined,
                           size: 13,
                           color: cert.isBlockchainAnchored
                               ? AppColors.primary
@@ -1881,4 +1931,3 @@ class _SavedTab extends StatelessWidget {
     );
   }
 }
-

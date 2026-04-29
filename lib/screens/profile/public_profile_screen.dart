@@ -1,16 +1,12 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/analytics_service.dart';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Public Profile Screen — Editorial cream/orange design system
-// ─────────────────────────────────────────────────────────────────────────────
 
 class PublicProfileScreen extends StatefulWidget {
   final String userId;
@@ -50,6 +46,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen>
   }
 
   Future<void> _loadAll() async {
+    final meId = Provider.of<AuthProvider>(context, listen: false).user?.id;
     await Future.wait([
       _fetchProfile(),
       _fetchPaintings(),
@@ -57,9 +54,8 @@ class _PublicProfileScreenState extends State<PublicProfileScreen>
       _fetchFollowStats(),
       _fetchStudio(),
     ]);
-    final me = Provider.of<AuthProvider>(context, listen: false).user;
-    if (me != null && me.id != widget.userId) {
-      await _checkFollowStatus(me.id);
+    if (meId != null && meId != widget.userId) {
+      await _checkFollowStatus(meId);
     }
   }
 
@@ -70,7 +66,12 @@ class _PublicProfileScreenState extends State<PublicProfileScreen>
           .select('*')
           .eq('id', widget.userId)
           .single();
-      if (mounted) setState(() { _profile = res; _loading = false; });
+      if (mounted) {
+        setState(() {
+          _profile = res;
+          _loading = false;
+        });
+      }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
@@ -83,7 +84,9 @@ class _PublicProfileScreenState extends State<PublicProfileScreen>
           .select('id, title, image_url, price_inr, is_available')
           .eq('artist_id', widget.userId)
           .order('created_at', ascending: false);
-      if (mounted) setState(() => _paintings = List<Map<String, dynamic>>.from(res));
+      if (mounted) {
+        setState(() => _paintings = List<Map<String, dynamic>>.from(res));
+      }
     } catch (_) {}
   }
 
@@ -95,7 +98,9 @@ class _PublicProfileScreenState extends State<PublicProfileScreen>
           .eq('author_id', widget.userId)
           .order('created_at', ascending: false)
           .limit(10);
-      if (mounted) setState(() => _threads = List<Map<String, dynamic>>.from(res));
+      if (mounted) {
+        setState(() => _threads = List<Map<String, dynamic>>.from(res));
+      }
     } catch (_) {}
   }
 
@@ -109,10 +114,12 @@ class _PublicProfileScreenState extends State<PublicProfileScreen>
           .from('follows')
           .select('id')
           .eq('follower_id', widget.userId);
-      if (mounted) setState(() {
-        _followersCount = (followers as List).length;
-        _followingCount = (following as List).length;
-      });
+      if (mounted) {
+        setState(() {
+          _followersCount = (followers as List).length;
+          _followingCount = (following as List).length;
+        });
+      }
     } catch (_) {}
   }
 
@@ -153,15 +160,22 @@ class _PublicProfileScreenState extends State<PublicProfileScreen>
             .delete()
             .eq('follower_id', me.id)
             .eq('following_id', widget.userId);
-        setState(() { _isFollowing = false; _followersCount--; });
+        setState(() {
+          _isFollowing = false;
+          _followersCount--;
+        });
       } else {
         await _supabase.from('follows').insert({
           'follower_id': me.id,
           'following_id': widget.userId,
         });
-        setState(() { _isFollowing = true; _followersCount++; });
+        setState(() {
+          _isFollowing = true;
+          _followersCount++;
+        });
       }
-    } catch (_) {} finally {
+    } catch (_) {
+    } finally {
       if (mounted) setState(() => _followLoading = false);
     }
   }
@@ -171,240 +185,299 @@ class _PublicProfileScreenState extends State<PublicProfileScreen>
     final me = Provider.of<AuthProvider>(context).user;
     final isOwn = me?.id == widget.userId;
 
+    final canvas = AppColors.canvasOf(context);
+    final surface = AppColors.surfaceOf(context);
+    final surfaceSoft = AppColors.surfaceSoftOf(context);
+    final border = AppColors.borderOf(context);
+    final borderStrong = AppColors.borderStrongOf(context);
+    final textPrimary = AppColors.textPrimaryOf(context);
+    final textSecondary = AppColors.textSecondaryOf(context);
+    final textTertiary = AppColors.textTertiaryOf(context);
+    final accent = AppColors.accentOf(context);
+    final accentSoft = AppColors.accentSoftOf(context);
+
     if (_loading) {
-      return const Scaffold(
-        backgroundColor: AppColors.background,
-        body: Center(child: CircularProgressIndicator(
-            color: AppColors.primary, strokeWidth: 2)),
+      return Scaffold(
+        backgroundColor: canvas,
+        body: Center(
+          child: CircularProgressIndicator(color: accent, strokeWidth: 2),
+        ),
       );
     }
 
     if (_profile == null) {
       return Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: canvas,
         appBar: AppBar(
-          backgroundColor: AppColors.background,
+          backgroundColor: canvas,
+          surfaceTintColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+            icon: Icon(Icons.arrow_back, color: textPrimary),
             onPressed: () => context.pop(),
           ),
         ),
-        body: const Center(child: Text('Profile not found',
-            style: TextStyle(color: AppColors.textSecondary))),
+        body: Center(
+          child: Text(
+            'Profile not found',
+            style: TextStyle(color: textSecondary),
+          ),
+        ),
       );
     }
 
     final name = _profile!['display_name'] as String? ??
-        _profile!['username'] as String? ?? 'Artist';
+        _profile!['username'] as String? ??
+        'Artist';
     final username = _profile!['username'] as String? ?? '';
-    final bio = _profile!['bio'] as String?;
+    final bio = (_profile!['bio'] as String?)?.trim();
     final avatarUrl = _profile!['profile_picture_url'] as String?;
     final isVerified = _profile!['is_verified'] == true;
     final artistType = _profile!['artist_type'] as String? ?? 'Creator';
+    final role = _profile!['role'] as String?;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: canvas,
       body: NestedScrollView(
         headerSliverBuilder: (context, _) => [
           SliverAppBar(
-            backgroundColor: AppColors.background,
-            elevation: 0,
+            backgroundColor: canvas,
             surfaceTintColor: Colors.transparent,
+            elevation: 0,
             pinned: true,
             leading: IconButton(
-              icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+              icon: Icon(Icons.arrow_back, color: textPrimary),
               onPressed: () => context.pop(),
             ),
-            title: Text('@$username',
-                style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700)),
+            titleSpacing: 0,
+            title: Row(
+              children: [
+                Text(
+                  username.isEmpty ? name : '@$username',
+                  style: TextStyle(
+                    color: textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                if (isVerified) ...[
+                  const SizedBox(width: 6),
+                  Icon(Icons.verified_rounded, size: 16, color: accent),
+                ],
+              ],
+            ),
             bottom: PreferredSize(
               preferredSize: const Size.fromHeight(1),
-              child: Container(
-                  height: 1, color: AppColors.border.withOpacity(0.5)),
+              child: Container(height: 1, color: border.withValues(alpha: 0.7)),
             ),
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+              padding: const EdgeInsets.fromLTRB(18, 18, 18, 0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(children: [
-                    // Avatar
-                    Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.primary.withOpacity(0.1),
-                        border: Border.all(
-                            color: AppColors.border, width: 2),
-                      ),
-                      child: avatarUrl != null
-                          ? ClipOval(
-                              child: CachedNetworkImage(
-                                  imageUrl: avatarUrl, fit: BoxFit.cover))
-                          : Center(
-                              child: Text(name[0].toUpperCase(),
-                                  style: const TextStyle(
-                                      color: AppColors.primary,
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 28))),
-                    ),
-                    const SizedBox(width: 20),
-
-                    // Stats
-                    Expanded(
-                      child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: [
-                            _Stat('${_paintings.length}', 'Works'),
-                            _Stat('$_followersCount', 'Followers'),
-                            _Stat('$_followingCount', 'Following'),
-                          ]),
-                    ),
-                  ]),
-
-                  const SizedBox(height: 14),
-
-                  // Name + verified + type
-                  Row(children: [
-                    Expanded(
-                      child: Text(name,
-                          style: const TextStyle(
-                              color: AppColors.textPrimary,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900)),
-                    ),
-                    if (isVerified)
-                      const Icon(Icons.verified,
-                          color: AppColors.primary, size: 18),
-                  ]),
-                  const SizedBox(height: 4),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(100),
+                      color: surface,
+                      borderRadius: BorderRadius.circular(28),
+                      border: Border.all(color: border),
+                      boxShadow: AppColors.cardShadows(context),
                     ),
-                    child: Text(artistType,
-                        style: const TextStyle(
-                            color: AppColors.primary,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            final compact = constraints.maxWidth < 720;
+                            final stats = compact
+                                ? Wrap(
+                                    spacing: 12,
+                                    runSpacing: 12,
+                                    children: [
+                                      _StatCard(value: '${_paintings.length}', label: 'Works'),
+                                      _StatCard(value: '$_followersCount', label: 'Followers'),
+                                      _StatCard(value: '$_followingCount', label: 'Following'),
+                                    ],
+                                  )
+                                : Row(
+                                    children: [
+                                      Expanded(
+                                        child: _StatCard(
+                                          value: '${_paintings.length}',
+                                          label: 'Works',
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: _StatCard(
+                                          value: '$_followersCount',
+                                          label: 'Followers',
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: _StatCard(
+                                          value: '$_followingCount',
+                                          label: 'Following',
+                                        ),
+                                      ),
+                                    ],
+                                  );
+
+                            if (compact) {
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _ProfileIdentityBlock(
+                                    name: name,
+                                    username: username,
+                                    bio: bio,
+                                    avatarUrl: avatarUrl,
+                                    artistType: artistType,
+                                    isVerified: isVerified,
+                                  ),
+                                  const SizedBox(height: 18),
+                                  stats,
+                                ],
+                              );
+                            }
+
+                            return Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  flex: 5,
+                                  child: _ProfileIdentityBlock(
+                                    name: name,
+                                    username: username,
+                                    bio: bio,
+                                    avatarUrl: avatarUrl,
+                                    artistType: artistType,
+                                    isVerified: isVerified,
+                                  ),
+                                ),
+                                const SizedBox(width: 18),
+                                Expanded(flex: 6, child: stats),
+                              ],
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 18),
+                        if (!isOwn)
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: _followLoading ? null : _handleFollow,
+                                  style: ElevatedButton.styleFrom(
+                                    elevation: 0,
+                                    backgroundColor: _isFollowing ? accentSoft : accent,
+                                    foregroundColor: _isFollowing ? textPrimary : Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 15),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(999),
+                                      side: _isFollowing
+                                          ? BorderSide(color: borderStrong)
+                                          : BorderSide.none,
+                                    ),
+                                  ),
+                                  child: _followLoading
+                                      ? SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: _isFollowing ? accent : Colors.white,
+                                          ),
+                                        )
+                                      : Text(
+                                          _isFollowing ? 'Following' : 'Follow',
+                                          style: const TextStyle(fontWeight: FontWeight.w800),
+                                        ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: () => context.push('/chat/${widget.userId}'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: textPrimary,
+                                    padding: const EdgeInsets.symmetric(vertical: 15),
+                                    side: BorderSide(color: borderStrong),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'Message',
+                                    style: TextStyle(fontWeight: FontWeight.w800),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          )
+                        else
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton(
+                              onPressed: () => context.push('/edit-profile'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: textPrimary,
+                                padding: const EdgeInsets.symmetric(vertical: 15),
+                                side: BorderSide(color: borderStrong),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                              ),
+                              child: const Text(
+                                'Edit Profile',
+                                style: TextStyle(fontWeight: FontWeight.w800),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
-                  if (bio != null && bio.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(bio,
-                        style: const TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 14,
-                            height: 1.4)),
-                  ],
-
-                  const SizedBox(height: 16),
-
-                  // Action buttons
-                  if (isOwn)
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton(
-                        onPressed: () => context.push('/edit-profile'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.textPrimary,
-                          side: const BorderSide(color: AppColors.border),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
-                        ),
-                        child: const Text('Edit Profile',
-                            style: TextStyle(fontWeight: FontWeight.w700)),
-                      ),
-                    )
-                  else
-                    Row(children: [
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: _followLoading ? null : _handleFollow,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _isFollowing
-                                ? AppColors.surface
-                                : AppColors.primary,
-                            foregroundColor: _isFollowing
-                                ? AppColors.textPrimary
-                                : Colors.white,
-                            elevation: 0,
-                            side: _isFollowing
-                                ? const BorderSide(color: AppColors.border)
-                                : null,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10)),
-                          ),
-                          child: _followLoading
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: AppColors.primary))
-                              : Text(_isFollowing ? 'Following' : 'Follow',
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w700)),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () =>
-                              context.push('/chat/${widget.userId}'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.textPrimary,
-                            side: const BorderSide(color: AppColors.border),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10)),
-                          ),
-                          child: const Text('Message',
-                              style:
-                                  TextStyle(fontWeight: FontWeight.w700)),
-                        ),
-                      ),
-                    ]),
-
-                  const SizedBox(height: 16),
-
-                  if ((_profile?['role'] as String?) == 'creator') ...[
+                  if (role == 'creator') ...[
+                    const SizedBox(height: 16),
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.border),
+                        color: surfaceSoft,
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(color: border),
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.storefront_rounded, color: AppColors.primary),
-                          const SizedBox(width: 10),
+                          Container(
+                            width: 46,
+                            height: 46,
+                            decoration: BoxDecoration(
+                              color: accentSoft,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Icon(Icons.storefront_rounded, color: accent),
+                          ),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   _studio?['name']?.toString() ?? '$name Studio',
-                                  style: const TextStyle(
-                                    color: AppColors.textPrimary,
+                                  style: TextStyle(
+                                    color: textPrimary,
                                     fontWeight: FontWeight.w800,
                                   ),
                                 ),
-                                const SizedBox(height: 2),
-                                const Text(
-                                  'Collections and featured works',
+                                const SizedBox(height: 3),
+                                Text(
+                                  'Collections, drops, and featured works',
                                   style: TextStyle(
-                                    color: AppColors.textSecondary,
+                                    color: textSecondary,
                                     fontSize: 12.5,
                                   ),
                                 ),
@@ -425,31 +498,46 @@ class _PublicProfileScreenState extends State<PublicProfileScreen>
                                 context.push('/shop');
                               }
                             },
-                            child: const Text('Enter Studio'),
+                            child: Text(
+                              'View studio',
+                              style: TextStyle(
+                                color: accent,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
                   ],
-
-                  // Tab bar
-                  TabBar(
-                    controller: _tabs,
-                    labelColor: AppColors.primary,
-                    unselectedLabelColor: AppColors.textTertiary,
-                    indicatorColor: AppColors.primary,
-                    indicatorWeight: 2,
-                    labelStyle: const TextStyle(
-                        fontWeight: FontWeight.w700, fontSize: 13),
-                    unselectedLabelStyle: const TextStyle(
-                        fontWeight: FontWeight.w500, fontSize: 13),
-                    dividerColor: AppColors.border,
-                    tabs: const [
-                      Tab(text: 'Gallery'),
-                      Tab(text: 'Threads'),
-                      Tab(text: 'About'),
-                    ],
+                  const SizedBox(height: 18),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: surface,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: border),
+                    ),
+                    child: TabBar(
+                      controller: _tabs,
+                      labelColor: accent,
+                      unselectedLabelColor: textTertiary,
+                      indicatorColor: accent,
+                      indicatorWeight: 3,
+                      dividerColor: Colors.transparent,
+                      labelStyle: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                      ),
+                      unselectedLabelStyle: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                      tabs: const [
+                        Tab(text: 'Portfolio'),
+                        Tab(text: 'Threads'),
+                        Tab(text: 'About'),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -461,10 +549,12 @@ class _PublicProfileScreenState extends State<PublicProfileScreen>
           children: [
             _GalleryTab(paintings: _paintings),
             _ThreadsTab(threads: _threads),
-            _AboutTab(profile: _profile!,
-                followersCount: _followersCount,
-                followingCount: _followingCount,
-                artworksCount: _paintings.length),
+            _AboutTab(
+              profile: _profile!,
+              followersCount: _followersCount,
+              followingCount: _followingCount,
+              artworksCount: _paintings.length,
+            ),
           ],
         ),
       ),
@@ -472,123 +562,387 @@ class _PublicProfileScreenState extends State<PublicProfileScreen>
   }
 }
 
-// ─── Stat Widget ──────────────────────────────────────────────────────────────
-class _Stat extends StatelessWidget {
-  final String value;
-  final String label;
-  const _Stat(this.value, this.label);
+class _ProfileIdentityBlock extends StatelessWidget {
+  final String name;
+  final String username;
+  final String? bio;
+  final String? avatarUrl;
+  final String artistType;
+  final bool isVerified;
+
+  const _ProfileIdentityBlock({
+    required this.name,
+    required this.username,
+    required this.bio,
+    required this.avatarUrl,
+    required this.artistType,
+    required this.isVerified,
+  });
 
   @override
-  Widget build(BuildContext context) => Column(children: [
-        Text(value,
-            style: const TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 18,
-                fontWeight: FontWeight.w900)),
-        const SizedBox(height: 2),
-        Text(label,
-            style: const TextStyle(
-                color: AppColors.textSecondary, fontSize: 12)),
-      ]);
+  Widget build(BuildContext context) {
+    final textPrimary = AppColors.textPrimaryOf(context);
+    final textSecondary = AppColors.textSecondaryOf(context);
+    final accent = AppColors.accentOf(context);
+    final accentSoft = AppColors.accentSoftOf(context);
+    final border = AppColors.borderOf(context);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 92,
+          height: 92,
+          decoration: BoxDecoration(
+            color: accentSoft,
+            shape: BoxShape.circle,
+            border: Border.all(color: border, width: 2),
+          ),
+          child: avatarUrl != null && avatarUrl!.isNotEmpty
+              ? ClipOval(
+                  child: CachedNetworkImage(
+                    imageUrl: avatarUrl!,
+                    fit: BoxFit.cover,
+                  ),
+                )
+              : Center(
+                  child: Text(
+                    name.isEmpty ? 'A' : name[0].toUpperCase(),
+                    style: TextStyle(
+                      color: accent,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 34,
+                    ),
+                  ),
+                ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      name,
+                      style: TextStyle(
+                        color: textPrimary,
+                        fontSize: 28,
+                        height: 1,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  if (isVerified)
+                    Icon(Icons.verified_rounded, color: accent, size: 20),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                username.isEmpty ? artistType : '@$username',
+                style: TextStyle(
+                  color: textSecondary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: accentSoft,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      artistType,
+                      style: TextStyle(
+                        color: accent,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  if ((bio ?? '').isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceSoftOf(context),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: border),
+                      ),
+                      child: Text(
+                        'Artist profile',
+                        style: TextStyle(
+                          color: textSecondary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              if ((bio ?? '').isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _CollapsibleBio(text: bio!),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }
 
-// ─── Gallery Tab ──────────────────────────────────────────────────────────────
+class _CollapsibleBio extends StatefulWidget {
+  final String text;
+  const _CollapsibleBio({required this.text});
+
+  @override
+  State<_CollapsibleBio> createState() => _CollapsibleBioState();
+}
+
+class _CollapsibleBioState extends State<_CollapsibleBio> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final textSecondary = AppColors.textSecondaryOf(context);
+    final accent = AppColors.accentOf(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          widget.text,
+          maxLines: _expanded ? null : 2,
+          overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
+          style: TextStyle(
+            color: textSecondary,
+            fontSize: 14,
+            height: 1.45,
+          ),
+        ),
+        if (widget.text.length > 90)
+          TextButton(
+            onPressed: () => setState(() => _expanded = !_expanded),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.only(top: 6),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Text(
+              _expanded ? 'Show less' : 'Show more',
+              style: TextStyle(
+                color: accent,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final String value;
+  final String label;
+  const _StatCard({required this.value, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final surfaceSoft = AppColors.surfaceSoftOf(context);
+    final border = AppColors.borderOf(context);
+    final textPrimary = AppColors.textPrimaryOf(context);
+    final textSecondary = AppColors.textSecondaryOf(context);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      decoration: BoxDecoration(
+        color: surfaceSoft,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              color: textPrimary,
+              fontSize: 26,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _GalleryTab extends StatelessWidget {
   final List<Map<String, dynamic>> paintings;
   const _GalleryTab({required this.paintings});
 
   @override
   Widget build(BuildContext context) {
+    final textSecondary = AppColors.textSecondaryOf(context);
+    final textTertiary = AppColors.textTertiaryOf(context);
+    final border = AppColors.borderOf(context);
+    final surface = AppColors.surfaceOf(context);
+
     if (paintings.isEmpty) {
-      return const Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.palette_outlined,
-              color: AppColors.textTertiary, size: 40),
-          SizedBox(height: 12),
-          Text('No artworks yet',
-              style: TextStyle(
-                  color: AppColors.textSecondary, fontSize: 14)),
-        ]),
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.palette_outlined, color: textTertiary, size: 40),
+            const SizedBox(height: 12),
+            Text(
+              'No artworks yet',
+              style: TextStyle(color: textSecondary, fontSize: 14),
+            ),
+          ],
+        ),
       );
     }
 
     return GridView.builder(
-      padding: const EdgeInsets.all(12),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 2,
-        mainAxisSpacing: 2,
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 26),
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 220,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
         childAspectRatio: 1,
       ),
       itemCount: paintings.length,
       itemBuilder: (_, i) {
         final p = paintings[i];
         final imageUrl = p['image_url'] as String?;
-        return GestureDetector(
+        return InkWell(
           onTap: () => context.push('/artwork/${p['id']}'),
-          child: imageUrl != null
-              ? CachedNetworkImage(imageUrl: imageUrl, fit: BoxFit.cover)
-              : Container(
-                  color: AppColors.surfaceVariant,
-                  child: const Center(
-                      child: Icon(Icons.palette_outlined,
-                          color: AppColors.textTertiary)),
-                ),
+          borderRadius: BorderRadius.circular(18),
+          child: Container(
+            decoration: BoxDecoration(
+              color: surface,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: border),
+              boxShadow: AppColors.cardShadows(context, hovered: false),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: imageUrl != null && imageUrl.isNotEmpty
+                ? CachedNetworkImage(imageUrl: imageUrl, fit: BoxFit.cover)
+                : Center(
+                    child: Icon(
+                      Icons.palette_outlined,
+                      color: textTertiary,
+                    ),
+                  ),
+          ),
         );
       },
     );
   }
 }
 
-// ─── Threads Tab ──────────────────────────────────────────────────────────────
 class _ThreadsTab extends StatelessWidget {
   final List<Map<String, dynamic>> threads;
   const _ThreadsTab({required this.threads});
 
   @override
   Widget build(BuildContext context) {
+    final textSecondary = AppColors.textSecondaryOf(context);
+    final textTertiary = AppColors.textTertiaryOf(context);
+    final textPrimary = AppColors.textPrimaryOf(context);
+    final border = AppColors.borderOf(context);
+    final surface = AppColors.surfaceOf(context);
+    final surfaceSoft = AppColors.surfaceSoftOf(context);
+
     if (threads.isEmpty) {
-      return const Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.forum_outlined,
-              color: AppColors.textTertiary, size: 40),
-          SizedBox(height: 12),
-          Text('No threads yet',
-              style: TextStyle(
-                  color: AppColors.textSecondary, fontSize: 14)),
-        ]),
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.forum_outlined, color: textTertiary, size: 40),
+            const SizedBox(height: 12),
+            Text(
+              'No threads yet',
+              style: TextStyle(color: textSecondary, fontSize: 14),
+            ),
+          ],
+        ),
       );
     }
 
     return ListView.separated(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 26),
       itemCount: threads.length,
-      separatorBuilder: (_, __) =>
-          const Divider(height: 1, color: AppColors.border),
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
       itemBuilder: (_, i) {
         final t = threads[i];
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: border),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if ((t['title'] ?? '').isNotEmpty)
-                Text(t['title'] as String,
-                    style: const TextStyle(
-                        color: AppColors.textPrimary,
+              Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: surfaceSoft,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: border),
+                    ),
+                    child: Icon(Icons.person_outline, size: 18, color: textTertiary),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      (t['title'] as String?)?.isNotEmpty == true
+                          ? t['title'] as String
+                          : 'Thread update',
+                      style: TextStyle(
+                        color: textPrimary,
                         fontSize: 14,
-                        fontWeight: FontWeight.w700)),
-              if ((t['content'] ?? '').isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(t['content'] as String,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 13,
-                          height: 1.4)),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if ((t['content'] ?? '').toString().isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  t['content'] as String,
+                  maxLines: 4,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: textSecondary,
+                    fontSize: 13.5,
+                    height: 1.45,
+                  ),
                 ),
+              ],
             ],
           ),
         );
@@ -597,12 +951,12 @@ class _ThreadsTab extends StatelessWidget {
   }
 }
 
-// ─── About Tab ────────────────────────────────────────────────────────────────
 class _AboutTab extends StatelessWidget {
   final Map<String, dynamic> profile;
   final int followersCount;
   final int followingCount;
   final int artworksCount;
+
   const _AboutTab({
     required this.profile,
     required this.followersCount,
@@ -612,53 +966,87 @@ class _AboutTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textPrimary = AppColors.textPrimaryOf(context);
+    final textSecondary = AppColors.textSecondaryOf(context);
+    final textTertiary = AppColors.textTertiaryOf(context);
+    final surface = AppColors.surfaceOf(context);
+    final border = AppColors.borderOf(context);
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('DETAILS',
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 26),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'About the artist',
             style: TextStyle(
-                color: AppColors.textTertiary,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.2)),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.border),
+              color: textPrimary,
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+            ),
           ),
-          child: Column(children: [
-            if (profile['artist_type'] != null)
-              _AboutRow(Icons.palette_outlined,
-                  'Artist Type', profile['artist_type'] as String),
-            if (profile['location'] != null)
-              _AboutRow(Icons.location_on_outlined,
-                  'Location', profile['location'] as String),
-            if (profile['website'] != null || profile['website_url'] != null)
-              _AboutRow(Icons.link_outlined, 'Website',
-                  (profile['website'] ?? profile['website_url']) as String),
-            _AboutRow(Icons.palette_outlined,
-                'Artworks', '$artworksCount pieces', isLast: true),
-          ]),
-        ),
-        const SizedBox(height: 20),
-        if ((profile['bio'] ?? '').isNotEmpty) ...[
-          const Text('BIO',
+          const SizedBox(height: 8),
+          Text(
+            'Profile details, links, and activity snapshot.',
+            style: TextStyle(
+              color: textSecondary,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: surface,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: border),
+            ),
+            child: Column(
+              children: [
+                if (profile['artist_type'] != null)
+                  _AboutRow(Icons.palette_outlined, 'Artist type', profile['artist_type'] as String),
+                if (profile['location'] != null)
+                  _AboutRow(Icons.location_on_outlined, 'Location', profile['location'] as String),
+                if (profile['website'] != null || profile['website_url'] != null)
+                  _AboutRow(
+                    Icons.link_outlined,
+                    'Website',
+                    (profile['website'] ?? profile['website_url']) as String,
+                  ),
+                _AboutRow(Icons.grid_view_rounded, 'Artworks', '$artworksCount pieces'),
+                _AboutRow(Icons.people_outline_rounded, 'Followers', '$followersCount'),
+                _AboutRow(
+                  Icons.person_add_alt_1_outlined,
+                  'Following',
+                  '$followingCount',
+                  isLast: true,
+                ),
+              ],
+            ),
+          ),
+          if ((profile['bio'] ?? '').toString().trim().isNotEmpty) ...[
+            const SizedBox(height: 18),
+            Text(
+              'Bio',
               style: TextStyle(
-                  color: AppColors.textTertiary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.2)),
-          const SizedBox(height: 10),
-          Text(profile['bio'] as String,
-              style: const TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 14,
-                  height: 1.6)),
+                color: textTertiary,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              profile['bio'] as String,
+              style: TextStyle(
+                color: textPrimary,
+                fontSize: 14,
+                height: 1.6,
+              ),
+            ),
+          ],
         ],
-      ]),
+      ),
     );
   }
 }
@@ -668,32 +1056,54 @@ class _AboutRow extends StatelessWidget {
   final String label;
   final String value;
   final bool isLast;
+
   const _AboutRow(this.icon, this.label, this.value, {this.isLast = false});
 
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: isLast
-            ? null
-            : const BoxDecoration(
-                border: Border(
-                    bottom:
-                        BorderSide(color: AppColors.border, width: 0.5))),
-        child: Row(children: [
-          Icon(icon, size: 16, color: AppColors.primary),
+  Widget build(BuildContext context) {
+    final accent = AppColors.accentOf(context);
+    final textPrimary = AppColors.textPrimaryOf(context);
+    final textSecondary = AppColors.textSecondaryOf(context);
+    final border = AppColors.borderOf(context);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: isLast
+          ? null
+          : BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: border, width: 0.6),
+              ),
+            ),
+      child: Row(
+        children: [
+          Icon(icon, size: 17, color: accent),
           const SizedBox(width: 10),
-          Text('$label  ',
-              style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500)),
           Expanded(
-            child: Text(value,
-                style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600)),
+            flex: 3,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: textSecondary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
-        ]),
-      );
+          Expanded(
+            flex: 5,
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                color: textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

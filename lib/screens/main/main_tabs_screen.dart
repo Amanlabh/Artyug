@@ -33,14 +33,8 @@ const _studioNavItems = [
       icon: Icons.add_photo_alternate_rounded,
       label: 'Upload Artwork',
       route: '/upload'),
-  _NavItem(
-      icon: Icons.store_rounded,
-      label: 'Studios',
-      route: '/shop'),
-  _NavItem(
-      icon: Icons.gavel_rounded,
-      label: 'Auctions',
-      route: '/auctions'),
+  _NavItem(icon: Icons.store_rounded, label: 'Studios', route: '/shop'),
+  _NavItem(icon: Icons.gavel_rounded, label: 'Auctions', route: '/auctions'),
   _NavItem(
       icon: Icons.workspace_premium_rounded,
       label: 'Certificates',
@@ -184,7 +178,8 @@ class _MainTabsScreenState extends State<MainTabsScreen> {
 
     // User chose "Create New Studio" in selector
     if (result?['__action'] == 'create_studio') {
-      final created = await context.push<Map<String, dynamic>>('/create-gallery');
+      final created =
+          await context.push<Map<String, dynamic>>('/create-gallery');
       if (!mounted) return;
       if (created != null && (created['id']?.toString().isNotEmpty ?? false)) {
         final shopId = Uri.encodeComponent(created['id']?.toString() ?? '');
@@ -206,7 +201,6 @@ class _MainTabsScreenState extends State<MainTabsScreen> {
       context.push('/upload');
     }
   }
-
 
   bool _isItemActive(_NavItem item, int currentIndex) {
     if (item.tabIndex != null) {
@@ -256,7 +250,8 @@ class _MainTabsScreenState extends State<MainTabsScreen> {
                   Expanded(
                     child: Container(
                       color: AppColors.canvasOf(context),
-                      child: IndexedStack(index: currentIndex, children: _screens),
+                      child:
+                          IndexedStack(index: currentIndex, children: _screens),
                     ),
                   ),
                 ],
@@ -372,7 +367,7 @@ class _MainTabsScreenState extends State<MainTabsScreen> {
 
   Widget _dashboardShell() {
     return DashboardBackground(
-      child: Container(
+        child: Container(
       color: Colors.transparent,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -497,6 +492,7 @@ class _DashboardSwitch extends StatelessWidget {
 class _PremiumSidebar extends StatelessWidget {
   final void Function(_NavItem item) openItem;
   final bool Function(_NavItem item) isActive;
+
   /// When true (mobile drawer), content scrolls and skips [Spacer] layout.
   final bool scrollable;
   final VoidCallback? onClose;
@@ -523,12 +519,29 @@ class _PremiumSidebar extends StatelessWidget {
             if (!scrollable && onClose != null)
               Align(
                 alignment: Alignment.centerRight,
-                child: IconButton(
-                  onPressed: onClose,
-                  tooltip: 'Close sidebar',
-                  icon: Icon(
-                    Icons.menu_open_rounded,
-                    color: AppColors.textSecondaryOf(context),
+                child: Material(
+                  color: AppColors.surfaceOf(context),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    side: BorderSide(
+                      color: AppColors.borderOf(context),
+                    ),
+                  ),
+                  child: InkWell(
+                    onTap: onClose,
+                    borderRadius: BorderRadius.circular(14),
+                    child: SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: Tooltip(
+                        message: 'Close sidebar',
+                        child: Icon(
+                          Icons.menu_open_rounded,
+                          color: AppColors.textPrimaryOf(context),
+                          size: 22,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -621,8 +634,7 @@ class _PremiumSidebar extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    auth.user?.userMetadata?['full_name'] ??
-                        'Artyug Collector',
+                    auth.user?.userMetadata?['full_name'] ?? 'Artyug Collector',
                     style: TextStyle(
                       color: AppColors.textPrimaryOf(context),
                       fontWeight: FontWeight.w700,
@@ -785,7 +797,9 @@ class _SidebarItemState extends State<_SidebarItem> {
               Icon(
                 widget.item.icon,
                 size: 18,
-                color: active ? AppColors.primary : AppColors.textSecondaryOf(context),
+                color: active
+                    ? AppColors.primary
+                    : AppColors.textSecondaryOf(context),
               ),
               const SizedBox(width: 11),
               Expanded(
@@ -845,8 +859,9 @@ class _ShellTopBar extends StatelessWidget {
             child: ArtyugSearchRouteTrigger(
               height: 46,
               hintText: 'Search artists, creators, artworks…',
-              onTap: () =>
-                  context.read<MainTabProvider>().setIndex(1), // Explore (in-shell search)
+              onTap: () => context
+                  .read<MainTabProvider>()
+                  .setIndex(1), // Explore (in-shell search)
             ),
           ),
           const SizedBox(width: 12),
@@ -874,7 +889,9 @@ class _ShellTopBar extends StatelessWidget {
                   border: Border.all(color: AppColors.borderOf(context)),
                 ),
                 child: Icon(
-                  tp.isDarkMode ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                  tp.isDarkMode
+                      ? Icons.light_mode_rounded
+                      : Icons.dark_mode_rounded,
                   color: AppColors.textSecondaryOf(context),
                   size: 20,
                 ),
@@ -969,48 +986,47 @@ class _LiteProPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOut,
-        height: 36,
-        padding: const EdgeInsets.all(3),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceSoftOf(context),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: AppColors.borderOf(context)),
-        ),
-        child: Stack(
-          children: [
-            AnimatedAlign(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+      height: 36,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceSoftOf(context),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.borderOf(context)),
+      ),
+      child: Stack(
+        children: [
+          AnimatedAlign(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            alignment: isProMode ? Alignment.centerRight : Alignment.centerLeft,
+            child: AnimatedContainer(
               duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOut,
-              alignment:
-                  isProMode ? Alignment.centerRight : Alignment.centerLeft,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                width: 54,
-                decoration: BoxDecoration(
-                  gradient: AppColors.accentGradientOf(context),
-                  borderRadius: BorderRadius.circular(999),
-                ),
+              width: 54,
+              decoration: BoxDecoration(
+                gradient: AppColors.accentGradientOf(context),
+                borderRadius: BorderRadius.circular(999),
               ),
             ),
-            Row(
-              children: [
-                _LiteProLabel(
-                  label: 'Lite',
-                  active: !isProMode,
-                  onTap: () => onChanged(false),
-                ),
-                _LiteProLabel(
-                  label: 'Pro',
-                  active: isProMode,
-                  onTap: () => onChanged(true),
-                ),
-              ],
-            ),
-          ],
-        ),
-      );
+          ),
+          Row(
+            children: [
+              _LiteProLabel(
+                label: 'Lite',
+                active: !isProMode,
+                onTap: () => onChanged(false),
+              ),
+              _LiteProLabel(
+                label: 'Pro',
+                active: isProMode,
+                onTap: () => onChanged(true),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -1035,7 +1051,9 @@ class _LiteProLabel extends StatelessWidget {
           child: Text(
             label,
             style: TextStyle(
-              color: active ? AppColors.onPrimary : AppColors.textSecondaryOf(context),
+              color: active
+                  ? AppColors.onPrimary
+                  : AppColors.textSecondaryOf(context),
               fontSize: 11.5,
               fontWeight: FontWeight.w700,
             ),
@@ -1081,7 +1099,9 @@ class _ModeToggleSheet extends StatelessWidget {
           Text(
             'Demo mode uses sample data. Live mode uses your real Artyug account and transactions.',
             style: TextStyle(
-                color: AppColors.textSecondaryOf(context), fontSize: 13, height: 1.4),
+                color: AppColors.textSecondaryOf(context),
+                fontSize: 13,
+                height: 1.4),
           ),
           const SizedBox(height: 16),
           _ModeOption(
@@ -1138,11 +1158,14 @@ class _ModeOption extends StatelessWidget {
       child: Ink(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color:
-              active ? color.withValues(alpha: 0.14) : AppColors.surfaceMutedOf(context),
+          color: active
+              ? color.withValues(alpha: 0.14)
+              : AppColors.surfaceMutedOf(context),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-              color: active ? color.withValues(alpha: 0.5) : AppColors.borderOf(context)),
+              color: active
+                  ? color.withValues(alpha: 0.5)
+                  : AppColors.borderOf(context)),
         ),
         child: Row(
           children: [
@@ -1168,7 +1191,8 @@ class _ModeOption extends StatelessWidget {
                   const SizedBox(height: 3),
                   Text(subtitle,
                       style: TextStyle(
-                          color: AppColors.textSecondaryOf(context), fontSize: 12)),
+                          color: AppColors.textSecondaryOf(context),
+                          fontSize: 12)),
                 ],
               ),
             ),
@@ -1223,12 +1247,13 @@ class _BottomNavWithUpload extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Left two: Home + Explore
-            for (int i = 0; i < 2; i++) _BottomNavItem(
-              icon: _icons[i],
-              label: _labels[i],
-              selected: currentIndex == i,
-              onTap: () => onTap(i),
-            ),
+            for (int i = 0; i < 2; i++)
+              _BottomNavItem(
+                icon: _icons[i],
+                label: _labels[i],
+                selected: currentIndex == i,
+                onTap: () => onTap(i),
+              ),
 
             // Centre — Upload pill button
             Center(
@@ -1236,7 +1261,8 @@ class _BottomNavWithUpload extends StatelessWidget {
                 onTap: onUpload,
                 child: Container(
                   margin: const EdgeInsets.symmetric(horizontal: 6),
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                   decoration: BoxDecoration(
                     color: AppColors.primary,
                     borderRadius: BorderRadius.circular(32),
@@ -1270,12 +1296,13 @@ class _BottomNavWithUpload extends StatelessWidget {
             ),
 
             // Right two: Profile + Dashboard
-            for (int i = 2; i < 4; i++) _BottomNavItem(
-              icon: _icons[i],
-              label: _labels[i],
-              selected: currentIndex == i,
-              onTap: () => onTap(i),
-            ),
+            for (int i = 2; i < 4; i++)
+              _BottomNavItem(
+                icon: _icons[i],
+                label: _labels[i],
+                selected: currentIndex == i,
+                onTap: () => onTap(i),
+              ),
           ],
         ),
       ),
@@ -1298,7 +1325,8 @@ class _BottomNavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? AppColors.primary : AppColors.textSecondaryOf(context);
+    final color =
+        selected ? AppColors.primary : AppColors.textSecondaryOf(context);
     return Expanded(
       child: InkWell(
         onTap: onTap,

@@ -10,16 +10,20 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/config/app_config.dart';
+import 'razorpay_web_checkout_stub.dart'
+    if (dart.library.js_interop) 'razorpay_web_checkout_web.dart'
+    as razorpay_web;
 
-/// Payment Service — Razorpay (live), Dodo & Stripe (coming soon).
+/// Payment Service - Razorpay (live), Dodo and Stripe (coming soon).
 ///
-/// **Native flow (Android/iOS):**
-///   1. Call [initiateRazorpayPayment] → creates order via `create-razorpay-order` Edge Function.
-///   2. Opens native Razorpay checkout sheet.
-///   3. Resolve/reject via [onPaymentSuccess] / [onPaymentError] callbacks.
+/// Native flow:
+///   1. Call [initiateRazorpayPayment] to create an order via
+///      `create-razorpay-order`.
+///   2. Open the native Razorpay sheet.
+///   3. Resolve through the plugin callbacks.
 ///
-/// **Web/Desktop:**
-///   Falls back to opening the Razorpay hosted checkout URL in a browser tab.
+/// Web flow:
+///   Uses Razorpay Checkout.js with the server-created `order_id`.
 
 enum PaymentGateway { razorpay, dodo, stripe, demo }
 
@@ -61,25 +65,23 @@ class PaymentService {
   static String defaultPaymentReturnUrl() {
     final base = AppConfig.publicSiteUrl;
     if (base != null && base.isNotEmpty) {
-      final u = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
-      return '$u/orders';
+      final normalized =
+          base.endsWith('/') ? base.substring(0, base.length - 1) : base;
+      return '$normalized/orders';
     }
     if (kIsWeb) {
-      final o = Uri.base.origin;
-      return '$o/orders';
+      return '${Uri.base.origin}/orders';
     }
     return 'https://artyug.app/orders';
   }
 
-  /// Only Razorpay is currently live. Dodo & Stripe are coming soon.
+  /// Only Razorpay is currently live. Dodo and Stripe are coming soon.
   static List<CheckoutPaymentMethod> availableCheckoutMethods() {
     final out = <CheckoutPaymentMethod>[];
     if (AppConfig.razorpayKeyId != null &&
         AppConfig.razorpayKeyId!.trim().isNotEmpty) {
       out.add(CheckoutPaymentMethod.razorpay);
     }
-    // Dodo & Stripe are visible in UI as "Coming Soon" — not added here so
-    // they cannot be selected as an active method.
     return out;
   }
 
@@ -134,23 +136,6 @@ class PaymentService {
     }
   }
 
-  // ── Native Razorpay (Android / iOS) ──────────────────────────────────────
-
-  /// Opens the native Razorpay payment sheet.
-  ///
-  /// Returns a [Completer] that resolves when the user completes or dismisses
-  /// the payment. Callers should await [completer.future].
-  ///
-  /// Usage:
-  /// ```dart
-  /// final result = await PaymentService.openNativeRazorpay(
-  ///   orderId: 'order_XXXXX',
-  ///   amountPaise: 50000,   // ₹500
-  ///   artworkTitle: 'My Painting',
-  ///   contactEmail: user.email,
-  ///   contactPhone: '+919876543210',
-  /// );
-  /// ```
   static Future<PaymentResult> openNativeRazorpay({
     required String orderId,
     required int amountPaise,
@@ -167,39 +152,44 @@ class PaymentService {
 
     razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, (PaymentSuccessResponse resp) {
       cleanUp();
-      completer.complete(PaymentResult(
-        success: true,
-        razorpayOrderId: orderId,
-        razorpayPaymentId: resp.paymentId,
-        gateway: PaymentGateway.razorpay,
-        amount: amountPaise / 100.0,
-        currency: 'INR',
-      ));
+      completer.complete(
+        PaymentResult(
+          success: true,
+          razorpayOrderId: orderId,
+          razorpayPaymentId: resp.paymentId,
+          gateway: PaymentGateway.razorpay,
+          amount: amountPaise / 100.0,
+          currency: 'INR',
+        ),
+      );
     });
 
     razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, (PaymentFailureResponse resp) {
       cleanUp();
-      completer.complete(PaymentResult(
-        success: false,
-        razorpayOrderId: orderId,
-        errorMessage: resp.message ?? 'Payment failed or cancelled',
-        gateway: PaymentGateway.razorpay,
-        amount: amountPaise / 100.0,
-        currency: 'INR',
-      ));
+      completer.complete(
+        PaymentResult(
+          success: false,
+          razorpayOrderId: orderId,
+          errorMessage: resp.message ?? 'Payment failed or cancelled',
+          gateway: PaymentGateway.razorpay,
+          amount: amountPaise / 100.0,
+          currency: 'INR',
+        ),
+      );
     });
 
     razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, (ExternalWalletResponse resp) {
-      // External wallet selected — treat as pending (user will complete outside)
       cleanUp();
-      completer.complete(PaymentResult(
-        success: true,
-        razorpayOrderId: orderId,
-        errorMessage: 'External wallet: ${resp.walletName}',
-        gateway: PaymentGateway.razorpay,
-        amount: amountPaise / 100.0,
-        currency: 'INR',
-      ));
+      completer.complete(
+        PaymentResult(
+          success: true,
+          razorpayOrderId: orderId,
+          errorMessage: 'External wallet: ${resp.walletName}',
+          gateway: PaymentGateway.razorpay,
+          amount: amountPaise / 100.0,
+          currency: 'INR',
+        ),
+      );
     });
 
     final options = <String, dynamic>{
@@ -222,10 +212,6 @@ class PaymentService {
     return completer.future;
   }
 
-  /// Full Razorpay flow:
-  ///   1. Call Edge Function to create order.
-  ///   2. On native: open Razorpay sheet and await result.
-  ///      On web/desktop: open hosted URL in browser.
   static Future<PaymentResult?> initiateRazorpayPayment({
     required String artworkId,
     required double amountInr,
@@ -239,7 +225,6 @@ class PaymentService {
       final session = client.auth.currentSession;
       if (session == null) return null;
 
-      // Step 1: Create order via Edge Function (uses secret key server-side)
       final response = await client.functions.invoke(
         'create-razorpay-order',
         body: {
@@ -262,7 +247,8 @@ class PaymentService {
           : jsonDecode(response.data.toString()) as Map<String, dynamic>;
 
       final razorpayOrderId = data['order_id'] as String?;
-      final amountPaise = (data['amount'] as num?)?.toInt() ?? (amountInr * 100).round();
+      final amountPaise =
+          (data['amount'] as num?)?.toInt() ?? (amountInr * 100).round();
       final keyId = data['key_id'] as String? ?? AppConfig.razorpayKeyId;
 
       if (razorpayOrderId == null) {
@@ -270,9 +256,7 @@ class PaymentService {
         return null;
       }
 
-      // Step 2: Open checkout
       if (!kIsWeb) {
-        // Android / iOS — native Razorpay sheet
         return await openNativeRazorpay(
           orderId: razorpayOrderId,
           amountPaise: amountPaise,
@@ -280,51 +264,44 @@ class PaymentService {
           contactEmail: contactEmail,
           contactPhone: contactPhone,
         );
-      } else {
-        // Web / Desktop — open hosted Razorpay checkout URL
-        final hostedUrl = data['hosted_url'] as String?;
-        if (hostedUrl != null) {
-          final uri = Uri.parse(hostedUrl);
-          if (await canLaunchUrl(uri)) {
-            await launchUrl(uri, mode: LaunchMode.externalApplication);
-          }
-          return PaymentResult(
-            success: true,
-            razorpayOrderId: razorpayOrderId,
-            gateway: PaymentGateway.razorpay,
-            amount: amountInr,
-            currency: 'INR',
-            hostedCheckoutUrl: hostedUrl,
-          );
-        }
+      }
 
-        // Fallback: build Razorpay Standard Checkout URL manually
-        final checkoutUri = Uri.https('rzp.io', '/l/${keyId}', {
-          'amount': amountPaise.toString(),
-          'currency': 'INR',
-        });
-        if (await canLaunchUrl(checkoutUri)) {
-          await launchUrl(checkoutUri, mode: LaunchMode.externalApplication);
-        }
+      if (keyId == null || keyId.trim().isEmpty) {
         return PaymentResult(
-          success: true,
+          success: false,
           razorpayOrderId: razorpayOrderId,
+          errorMessage:
+              'Live web checkout is not configured correctly. Missing Razorpay key_id in server response.',
           gateway: PaymentGateway.razorpay,
           amount: amountInr,
           currency: 'INR',
-          hostedCheckoutUrl: checkoutUri.toString(),
         );
       }
+
+      final webResult = await razorpay_web.openRazorpayWebCheckout(
+        keyId: keyId,
+        orderId: razorpayOrderId,
+        amountPaise: amountPaise,
+        artworkTitle: artworkTitle,
+        contactEmail: contactEmail,
+        contactPhone: contactPhone,
+      );
+
+      return PaymentResult(
+        success: webResult.success,
+        razorpayOrderId: webResult.orderId ?? razorpayOrderId,
+        razorpayPaymentId: webResult.paymentId,
+        errorMessage: webResult.errorMessage,
+        gateway: PaymentGateway.razorpay,
+        amount: amountInr,
+        currency: 'INR',
+      );
     } catch (e) {
       debugPrint('[PaymentService] initiateRazorpayPayment failed: $e');
       return null;
     }
   }
 
-  // ── Dodo Payments (Coming Soon) ────────────────────────────────────────────
-
-  /// Dodo Payments hosted checkout — not yet live.
-  /// UI shows "Coming Soon" badge.
   static Future<PaymentResult?> initiateDodoCheckout({
     required String artworkId,
     required String artworkTitle,
@@ -351,7 +328,9 @@ class PaymentService {
       );
 
       if (response.status != 200) {
-        debugPrint('[PaymentService] create-dodo-checkout error: ${response.data}');
+        debugPrint(
+          '[PaymentService] create-dodo-checkout error: ${response.data}',
+        );
         return null;
       }
 
@@ -382,10 +361,6 @@ class PaymentService {
     }
   }
 
-  // ── Stripe Checkout (Coming Soon) ──────────────────────────────────────────
-
-  /// Stripe Checkout Session — not yet live.
-  /// UI shows "Coming Soon" badge.
   static Future<PaymentResult?> initiateStripeCheckout({
     required String artworkId,
     required String artworkTitle,
@@ -450,21 +425,24 @@ class PaymentService {
   static String? _pickHostedUrl(Map<String, dynamic> data) {
     final stripeUrl = data['url'] as String?;
     if (stripeUrl != null && stripeUrl.isNotEmpty) return stripeUrl;
+
     final direct = data['hosted_url'] as String?;
     if (direct != null && direct.isNotEmpty) return direct;
+
     final checkoutUrl = data['checkout_url'] as String?;
     if (checkoutUrl != null && checkoutUrl.isNotEmpty) return checkoutUrl;
+
     final nested = data['data'];
     if (nested is Map) {
-      final h = nested['hosted_url'] as String?;
-      if (h != null && h.isNotEmpty) return h;
-      final u = nested['url'] as String?;
-      if (u != null && u.isNotEmpty) return u;
+      final hosted = nested['hosted_url'] as String?;
+      if (hosted != null && hosted.isNotEmpty) return hosted;
+
+      final url = nested['url'] as String?;
+      if (url != null && url.isNotEmpty) return url;
     }
+
     return null;
   }
-
-  // ── Demo Payment ───────────────────────────────────────────────────────────
 
   static Future<PaymentResult> demoPayment({
     required String artworkId,
@@ -482,8 +460,6 @@ class PaymentService {
     );
   }
 
-  // ── Guards ─────────────────────────────────────────────────────────────────
-
   static String? blockMessageForLiveMode(bool runtimeLiveMode) {
     final reason = AppConfig.livePaymentBlockReasonWhenLive(runtimeLiveMode);
     if (reason == null) return null;
@@ -498,4 +474,3 @@ class PaymentService {
     return null;
   }
 }
-
