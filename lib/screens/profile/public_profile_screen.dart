@@ -7,6 +7,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/theme/app_colors.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/analytics_service.dart';
+import '../../core/utils/supabase_media_url.dart';
+import '../../repositories/painting_repository.dart';
 
 class PublicProfileScreen extends StatefulWidget {
   final String userId;
@@ -23,6 +25,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen>
   Map<String, dynamic>? _profile;
   List<Map<String, dynamic>> _paintings = [];
   List<Map<String, dynamic>> _threads = [];
+  List<Map<String, dynamic>> _suggestedProfiles = [];
   Map<String, dynamic>? _studio;
   bool _loading = true;
   bool _isFollowing = false;
@@ -53,6 +56,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen>
       _fetchThreads(),
       _fetchFollowStats(),
       _fetchStudio(),
+      _fetchSuggestedProfiles(meId),
     ]);
     if (meId != null && meId != widget.userId) {
       await _checkFollowStatus(meId);
@@ -93,13 +97,58 @@ class _PublicProfileScreenState extends State<PublicProfileScreen>
   Future<void> _fetchThreads() async {
     try {
       final res = await _supabase
-          .from('community_posts')
-          .select('id, title, content, created_at')
-          .eq('author_id', widget.userId)
+          .from('paintings')
+          .select(
+              'id, title, description, image_url, medium, category, created_at, profiles:artist_id(display_name, username, profile_picture_url, is_verified)')
+          .eq('artist_id', widget.userId)
           .order('created_at', ascending: false)
           .limit(10);
+      final rows = List<Map<String, dynamic>>.from(res);
+      final currentUserId = _supabase.auth.currentUser?.id;
+      if (rows.isNotEmpty) {
+        final ids = rows.map((e) => e['id']?.toString()).whereType<String>().toList();
+        final likes = await _supabase
+            .from('painting_likes')
+            .select('painting_id, user_id')
+            .inFilter('painting_id', ids);
+        final likeCounts = <String, int>{};
+        final likedSet = <String>{};
+        for (final row in (likes as List)) {
+          final paintingId = row['painting_id']?.toString();
+          if (paintingId == null || paintingId.isEmpty) continue;
+          likeCounts[paintingId] = (likeCounts[paintingId] ?? 0) + 1;
+          if (currentUserId != null && row['user_id'] == currentUserId) {
+            likedSet.add(paintingId);
+          }
+        }
+        for (final row in rows) {
+          final id = row['id']?.toString() ?? '';
+          row['likes_count'] = likeCounts[id] ?? 0;
+          row['is_liked'] = likedSet.contains(id);
+        }
+      }
       if (mounted) {
-        setState(() => _threads = List<Map<String, dynamic>>.from(res));
+        setState(() => _threads = rows);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _fetchSuggestedProfiles(String? meId) async {
+    try {
+      final rows = await _supabase
+          .from('profiles')
+          .select(
+              'id, username, display_name, profile_picture_url, artist_type, is_verified, followers_count')
+          .neq('id', widget.userId)
+          .order('followers_count', ascending: false)
+          .limit(12);
+      final list = List<Map<String, dynamic>>.from(rows as List)
+          .where((row) => row['id']?.toString().isNotEmpty == true)
+          .where((row) => row['id']?.toString() != meId)
+          .take(6)
+          .toList();
+      if (mounted) {
+        setState(() => _suggestedProfiles = list);
       }
     } catch (_) {}
   }
@@ -233,7 +282,8 @@ class _PublicProfileScreenState extends State<PublicProfileScreen>
     final bio = (_profile!['bio'] as String?)?.trim();
     final avatarUrl = _profile!['profile_picture_url'] as String?;
     final isVerified = _profile!['is_verified'] == true;
-    final artistType = _profile!['artist_type'] as String? ?? 'Creator';
+    final artistType =
+        _friendlyArtistType(_profile!['artist_type'] as String? ?? 'Creator');
     final role = _profile!['role'] as String?;
 
     return Scaffold(
@@ -509,6 +559,10 @@ class _PublicProfileScreenState extends State<PublicProfileScreen>
                         ],
                       ),
                     ),
+                  ],
+                  if (!isOwn && _isFollowing && _suggestedProfiles.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    _SuggestedProfilesRail(profiles: _suggestedProfiles),
                   ],
                   const SizedBox(height: 18),
                   DecoratedBox(
@@ -866,10 +920,6 @@ class _ThreadsTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final textSecondary = AppColors.textSecondaryOf(context);
     final textTertiary = AppColors.textTertiaryOf(context);
-    final textPrimary = AppColors.textPrimaryOf(context);
-    final border = AppColors.borderOf(context);
-    final surface = AppColors.surfaceOf(context);
-    final surfaceSoft = AppColors.surfaceSoftOf(context);
 
     if (threads.isEmpty) {
       return Center(
@@ -891,62 +941,402 @@ class _ThreadsTab extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 26),
       itemCount: threads.length,
       separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (_, i) {
-        final t = threads[i];
-        return Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: surface,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: border),
-          ),
-          child: Column(
+      itemBuilder: (_, i) => _PublicProfileThreadCard(thread: threads[i]),
+    );
+  }
+}
+
+class _PublicProfileThreadCard extends StatefulWidget {
+  final Map<String, dynamic> thread;
+
+  const _PublicProfileThreadCard({required this.thread});
+
+  @override
+  State<_PublicProfileThreadCard> createState() =>
+      _PublicProfileThreadCardState();
+}
+
+class _PublicProfileThreadCardState extends State<_PublicProfileThreadCard> {
+  late bool _liked;
+  late int _likesCount;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _liked = widget.thread['is_liked'] == true;
+    _likesCount = (widget.thread['likes_count'] as int?) ?? 0;
+  }
+
+  Future<void> _toggleLike() async {
+    if (_busy) return;
+    final paintingId = widget.thread['id']?.toString();
+    if (paintingId == null || paintingId.isEmpty) return;
+    final previousLiked = _liked;
+    final previousCount = _likesCount;
+
+    setState(() {
+      _busy = true;
+      _liked = !previousLiked;
+      _likesCount = previousCount + (previousLiked ? -1 : 1);
+    });
+
+    try {
+      final nextLiked = await PaintingRepository.toggleLike(paintingId);
+      if (!mounted) return;
+      setState(() {
+        _liked = nextLiked;
+        _likesCount = previousCount +
+            (nextLiked == previousLiked ? 0 : (nextLiked ? 1 : -1));
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _liked = previousLiked;
+        _likesCount = previousCount;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not update like')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textSecondary = AppColors.textSecondaryOf(context);
+    final textTertiary = AppColors.textTertiaryOf(context);
+    final textPrimary = AppColors.textPrimaryOf(context);
+    final border = AppColors.borderOf(context);
+    final surface = AppColors.surfaceOf(context);
+    final t = widget.thread;
+    final profile = t['profiles'] as Map<String, dynamic>? ?? {};
+    final authorName =
+        (profile['display_name'] ?? profile['username'] ?? 'Artist').toString();
+    final handle = (profile['username'] ?? authorName)
+        .toString()
+        .trim()
+        .toLowerCase()
+        .replaceAll(' ', '');
+    final avatarUrl = SupabaseMediaUrl.resolve(
+      profile['profile_picture_url'] as String?,
+    );
+    final postText = ((t['description'] ?? '').toString().trim().isNotEmpty
+            ? t['description']
+            : t['title'])
+        .toString();
+    final imageUrl = SupabaseMediaUrl.resolve(t['image_url'] as String?);
+    final createdAt = DateTime.tryParse((t['created_at'] ?? '').toString());
+    final tag = (t['category'] ?? t['medium'] ?? '').toString().trim();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: surfaceSoft,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: border),
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: AppColors.accentSoftOf(context),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: border),
+                ),
+                child: avatarUrl.isNotEmpty
+                    ? ClipOval(
+                        child: CachedNetworkImage(
+                          imageUrl: avatarUrl,
+                          fit: BoxFit.cover,
+                        ),
+                      )
+                    : Icon(Icons.person_outline, size: 18, color: textTertiary),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            authorName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: textPrimary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        if (profile['is_verified'] == true)
+                          const Padding(
+                            padding: EdgeInsets.only(left: 4),
+                            child: Icon(
+                              Icons.verified_rounded,
+                              size: 16,
+                              color: AppColors.info,
+                            ),
+                          ),
+                      ],
                     ),
-                    child: Icon(Icons.person_outline, size: 18, color: textTertiary),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      (t['title'] as String?)?.isNotEmpty == true
-                          ? t['title'] as String
-                          : 'Thread update',
+                    const SizedBox(height: 2),
+                    Text(
+                      '@$handle - ${createdAt == null ? 'now' : _profileRelativeTime(createdAt)}',
                       style: TextStyle(
-                        color: textPrimary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
+                        color: textTertiary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
-                  ),
-                ],
-              ),
-              if ((t['content'] ?? '').toString().isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Text(
-                  t['content'] as String,
-                  maxLines: 4,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: textSecondary,
-                    fontSize: 13.5,
-                    height: 1.45,
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ],
           ),
-        );
-      },
+          if (postText.trim().isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              postText,
+              maxLines: 5,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: textSecondary,
+                fontSize: 13.5,
+                height: 1.45,
+              ),
+            ),
+          ],
+          if (tag.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+              decoration: BoxDecoration(
+                color: AppColors.accentSoftOf(context),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                tag,
+                style: TextStyle(
+                  color: AppColors.accentOf(context),
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+          if (imageUrl.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: AspectRatio(
+                aspectRatio: 16 / 10,
+                child: CachedNetworkImage(
+                  imageUrl: imageUrl,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Icon(Icons.repeat_rounded, size: 18, color: textTertiary),
+              const SizedBox(width: 20),
+              InkWell(
+                onTap: _toggleLike,
+                borderRadius: BorderRadius.circular(999),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _liked
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
+                        size: 18,
+                        color: _liked ? AppColors.error : textTertiary,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '$_likesCount',
+                        style: TextStyle(
+                          color: _liked ? AppColors.error : textTertiary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const Spacer(),
+              Icon(Icons.share_outlined, size: 18, color: textTertiary),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _profileRelativeTime(DateTime date) {
+  final diff = DateTime.now().difference(date).abs();
+  if (diff.inMinutes < 1) return 'now';
+  if (diff.inMinutes < 60) return '${diff.inMinutes}m';
+  if (diff.inHours < 24) return '${diff.inHours}h';
+  if (diff.inDays < 7) return '${diff.inDays}d';
+  return '${(diff.inDays / 7).floor()}w';
+}
+
+class _SuggestedProfilesRail extends StatelessWidget {
+  final List<Map<String, dynamic>> profiles;
+
+  const _SuggestedProfilesRail({required this.profiles});
+
+  @override
+  Widget build(BuildContext context) {
+    final textPrimary = AppColors.textPrimaryOf(context);
+    final textSecondary = AppColors.textSecondaryOf(context);
+    final textTertiary = AppColors.textTertiaryOf(context);
+    final border = AppColors.borderOf(context);
+    final surface = AppColors.surfaceOf(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Suggested for you',
+          style: TextStyle(
+            color: textPrimary,
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 214,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: profiles.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (context, i) {
+              final profile = profiles[i];
+              final name =
+                  (profile['display_name'] ?? profile['username'] ?? 'Artist')
+                      .toString();
+              final handle = (profile['username'] ?? 'artist').toString();
+              final avatar = SupabaseMediaUrl.resolve(
+                profile['profile_picture_url'] as String?,
+              );
+              final followers =
+                  (profile['followers_count'] as num?)?.toInt() ?? 0;
+
+              return InkWell(
+                onTap: () =>
+                    context.push('/public-profile/${profile['id']}'),
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  width: 172,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: surface,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Align(
+                        alignment: Alignment.topRight,
+                        child: Icon(
+                          Icons.close_rounded,
+                          size: 16,
+                          color: textTertiary,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      CircleAvatar(
+                        radius: 30,
+                        backgroundColor: AppColors.accentSoftOf(context),
+                        foregroundImage:
+                            avatar.isNotEmpty ? NetworkImage(avatar) : null,
+                        child: avatar.isEmpty
+                            ? Text(
+                                name.substring(0, 1).toUpperCase(),
+                                style: TextStyle(
+                                  color: AppColors.accentOf(context),
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              )
+                            : null,
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: textPrimary,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        handle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: textSecondary,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        followers > 0 ? '$followers followers' : 'Creator',
+                        style: TextStyle(
+                          color: textTertiary,
+                          fontSize: 11.5,
+                        ),
+                      ),
+                      const Spacer(),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: () =>
+                              context.push('/public-profile/${profile['id']}'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.textPrimaryOf(context),
+                            foregroundColor: AppColors.canvasOf(context),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          child: const Text('Follow'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1004,7 +1394,11 @@ class _AboutTab extends StatelessWidget {
             child: Column(
               children: [
                 if (profile['artist_type'] != null)
-                  _AboutRow(Icons.palette_outlined, 'Artist type', profile['artist_type'] as String),
+                  _AboutRow(
+                    Icons.palette_outlined,
+                    'Artist type',
+                    _friendlyArtistType(profile['artist_type'] as String),
+                  ),
                 if (profile['location'] != null)
                   _AboutRow(Icons.location_on_outlined, 'Location', profile['location'] as String),
                 if (profile['website'] != null || profile['website_url'] != null)
@@ -1049,6 +1443,16 @@ class _AboutTab extends StatelessWidget {
       ),
     );
   }
+}
+
+String _friendlyArtistType(String value) {
+  final normalized = value.trim().replaceAll('_', ' ').replaceAll('-', ' ');
+  if (normalized.isEmpty) return '';
+  return normalized
+      .split(RegExp(r'\s+'))
+      .where((part) => part.isNotEmpty)
+      .map((part) => '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}')
+      .join(' ');
 }
 
 class _AboutRow extends StatelessWidget {
@@ -1107,3 +1511,4 @@ class _AboutRow extends StatelessWidget {
     );
   }
 }
+

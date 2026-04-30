@@ -7,7 +7,9 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/config/canonical_guilds.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/supabase_media_url.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/onboarding_guide.dart';
 
@@ -70,46 +72,28 @@ const List<Map<String, String>> _kPurchaseStyles = [
 
 final _fallbackGuilds = <_GuildData>[
   const _GuildData(
-    id: 'painters-guild',
-    name: 'Painters Guild',
-    description: 'Traditional and contemporary painting creators.',
-    memberCount: 1420,
-    category: 'Painting',
+    id: 'guild-contemporary',
+    name: 'Artyug Community',
+    description: 'An iconic community curated thoughtfully for artists and collectors.',
+    memberCount: 14,
+    category: 'Community',
+    imageUrl: 'assets/guilds/artyug.png',
   ),
   const _GuildData(
-    id: 'digital-artists',
-    name: 'Digital Artists',
-    description: '3D, generative, and digital-native visual creators.',
-    memberCount: 1980,
-    category: 'Digital',
+    id: 'guild-digital',
+    name: 'Motojojo',
+    description: 'Creators and collectors in the Motojojo circle sharing culture and collabs.',
+    memberCount: 12,
+    category: 'Culture',
+    imageUrl: 'assets/guilds/motojojo.png',
   ),
   const _GuildData(
-    id: 'photography-circle',
-    name: 'Photography Circle',
-    description: 'Street, documentary, portrait, and experimental photo.',
-    memberCount: 980,
-    category: 'Photography',
-  ),
-  const _GuildData(
-    id: 'mixed-media-collective',
-    name: 'Mixed Media Collective',
-    description: 'Artists blending formats, textures, and techniques.',
-    memberCount: 760,
-    category: 'Mixed Media',
-  ),
-  const _GuildData(
-    id: 'sculptors-guild',
-    name: 'Sculptors Guild',
-    description: 'Stone, metal, clay, and contemporary sculptural forms.',
-    memberCount: 410,
-    category: 'Sculpture',
-  ),
-  const _GuildData(
-    id: 'street-art-circle',
-    name: 'Street Art Circle',
-    description: 'Public-space and mural creators reshaping city culture.',
-    memberCount: 640,
-    category: 'Street Art',
+    id: 'guild-traditional',
+    name: 'Webcoin Labs',
+    description: 'Onchain creators exploring drops, experiments, and verified digital ownership.',
+    memberCount: 10,
+    category: 'Web3 Art',
+    imageUrl: 'assets/guilds/webcoinlabs.jpg',
   ),
 ];
 
@@ -301,13 +285,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   Future<List<_GuildData>> _fetchGuildSuggestions() async {
     final client = Supabase.instance.client;
 
-    Future<List<Map<String, dynamic>>> fetchRows(String table) async {
-      final response = await client.from(table).select('*').limit(10);
-      return List<Map<String, dynamic>>.from(response as List);
-    }
-
     try {
-      final rows = await fetchRows('guilds');
+      final rows = await CanonicalGuilds.fetchOfficialCommunities(client);
       final parsed =
           rows.map(_GuildData.fromRow).whereType<_GuildData>().toList();
       if (parsed.isNotEmpty) return parsed;
@@ -316,7 +295,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     }
 
     try {
-      final rows = await fetchRows('communities');
+      final response = await client.from('guilds').select('*').limit(10);
+      final rows = List<Map<String, dynamic>>.from(response as List);
       final parsed =
           rows.map(_GuildData.fromRow).whereType<_GuildData>().toList();
       if (parsed.isNotEmpty) return parsed;
@@ -337,9 +317,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     try {
       final response = await client
           .from('profiles')
-          .select('id, display_name, username, bio, role')
+          .select(
+              'id, display_name, username, bio, role, artist_type, profile_picture_url, avatar_url, followers_count')
           .eq('role', 'creator')
           .neq('id', userId)
+          .order('followers_count', ascending: false)
           .limit(10);
 
       final rows = List<Map<String, dynamic>>.from(response as List);
@@ -1743,21 +1725,60 @@ class GuildCard extends StatelessWidget {
           width: joined ? 1.4 : 1,
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  guild.name,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  margin: const EdgeInsets.only(right: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.06),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: guild.imageUrl.trim().isEmpty
+                      ? Center(
+                          child: Text(
+                            guild.name.isNotEmpty ? guild.name[0].toUpperCase() : 'G',
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        )
+                      : guild.imageUrl.startsWith('assets/')
+                          ? Image.asset(guild.imageUrl, fit: BoxFit.cover)
+                          : Image.network(
+                              guild.imageUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Center(
+                                child: Text(
+                                  guild.name.isNotEmpty
+                                      ? guild.name[0].toUpperCase()
+                                      : 'G',
+                                  style: const TextStyle(
+                                    color: AppColors.textPrimary,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ),
+                ),
+                Expanded(
+                  child: Text(
+                    guild.name,
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
-              ),
               _TagLabel(text: guild.category),
             ],
           ),
@@ -1835,11 +1856,16 @@ class CreatorFollowCard extends StatelessWidget {
           CircleAvatar(
             radius: 22,
             backgroundColor: AppColors.primary.withOpacity(0.18),
-            child: Text(
-              initials,
-              style: const TextStyle(
-                  color: AppColors.textPrimary, fontWeight: FontWeight.w700),
-            ),
+            backgroundImage: creator.avatarUrl.isNotEmpty
+                ? NetworkImage(creator.avatarUrl)
+                : null,
+            child: creator.avatarUrl.isEmpty
+                ? Text(
+                    initials,
+                    style: const TextStyle(
+                        color: AppColors.textPrimary, fontWeight: FontWeight.w700),
+                  )
+                : null,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -2432,6 +2458,7 @@ class _GuildData {
   final String description;
   final int memberCount;
   final String category;
+  final String imageUrl;
 
   const _GuildData({
     required this.id,
@@ -2439,6 +2466,7 @@ class _GuildData {
     required this.description,
     required this.memberCount,
     required this.category,
+    this.imageUrl = '',
   });
 
   static _GuildData? fromRow(Map<String, dynamic> row) {
@@ -2469,6 +2497,7 @@ class _GuildData {
       description: description,
       memberCount: memberCount > 0 ? memberCount : 100,
       category: category,
+      imageUrl: CanonicalGuilds.preferredImageForCommunityRow(row),
     );
   }
 }
@@ -2479,6 +2508,7 @@ class _CreatorSuggestion {
   final String username;
   final String medium;
   final int followers;
+  final String avatarUrl;
 
   const _CreatorSuggestion({
     required this.id,
@@ -2486,6 +2516,7 @@ class _CreatorSuggestion {
     required this.username,
     required this.medium,
     required this.followers,
+    this.avatarUrl = '',
   });
 
   static _CreatorSuggestion? fromProfileRow(Map<String, dynamic> row) {
@@ -2497,19 +2528,30 @@ class _CreatorSuggestion {
 
     final displayName =
         (row['display_name'] ?? row['full_name'] ?? username).toString().trim();
+    final avatarUrl = SupabaseMediaUrl.resolve(
+      (row['profile_picture_url'] ?? row['avatar_url']) as String?,
+    );
 
     final bio = (row['bio'] ?? '').toString().toLowerCase();
-    var medium = 'Creator';
+    var medium = (row['artist_type'] ?? '').toString().trim();
+    if (medium.isEmpty) medium = 'Creator';
     if (bio.contains('photo')) medium = 'Photography';
     if (bio.contains('digital')) medium = 'Digital Art';
     if (bio.contains('paint')) medium = 'Painting';
+    final followers = _toInt(
+      row['followers_count'] ??
+          row['follower_count'] ??
+          row['total_followers'] ??
+          row['followers'],
+    );
 
     return _CreatorSuggestion(
       id: id,
       displayName: displayName,
       username: username,
       medium: medium,
-      followers: 1000,
+      followers: followers,
+      avatarUrl: avatarUrl,
     );
   }
 }

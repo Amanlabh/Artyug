@@ -227,6 +227,15 @@ class _NfcScanScreenState extends State<NfcScanScreen>
       }
     }
 
+    if (payload.startsWith('artyug://order/')) {
+      final id = payload.replaceFirst('artyug://order/', '').trim();
+      if (id.isNotEmpty) {
+        if (!mounted) return;
+        context.push('/order/$id');
+        return;
+      }
+    }
+
     if (payload.startsWith('http://') || payload.startsWith('https://')) {
       await _openInsideAndOfferExternal(payload);
       return;

@@ -24,6 +24,7 @@ class _GuildHomeScreenState extends State<GuildHomeScreen>
   List<GuildModel> _allGuilds = [];
   List<GuildModel> _myGuilds = [];
   bool _loading = true;
+  bool _membershipBusy = false;
   String? _error;
 
   @override
@@ -92,24 +93,33 @@ class _GuildHomeScreenState extends State<GuildHomeScreen>
   Future<void> _toggleJoin(GuildModel guild) async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return;
+    if (_membershipBusy) return;
 
     final isJoined = _myGuilds.any((g) => g.id == guild.id);
     try {
+      setState(() => _membershipBusy = true);
       if (isJoined) {
-        await Supabase.instance.client
-            .from('community_members')
-            .delete()
-            .eq('user_id', userId)
-            .eq('community_id', guild.id);
-        setState(() => _myGuilds.removeWhere((g) => g.id == guild.id));
+        await _leaveGuildEverywhere(userId, guild.id);
       } else {
-        await Supabase.instance.client.from('community_members').insert({
-          'user_id': userId,
-          'community_id': guild.id,
-          'role': 'member',
-        });
-        setState(() => _myGuilds.add(guild));
+        await _joinGuildEverywhere(userId, guild.id);
       }
+      if (!mounted) return;
+      setState(() {
+        _allGuilds = _allGuilds
+            .map((g) => g.id == guild.id
+                ? g.copyWith(
+                    memberCount: (g.memberCount + (isJoined ? -1 : 1)).clamp(0, 999999),
+                  )
+                : g)
+            .toList();
+        if (isJoined) {
+          _myGuilds.removeWhere((g) => g.id == guild.id);
+        } else if (!_myGuilds.any((g) => g.id == guild.id)) {
+          _myGuilds.add(
+            guild.copyWith(memberCount: guild.memberCount + 1),
+          );
+        }
+      });
     } catch (e) {
       if (mounted) {
         final msg = e.toString();
@@ -123,7 +133,66 @@ class _GuildHomeScreenState extends State<GuildHomeScreen>
           ),
         );
       }
+    } finally {
+      if (mounted) setState(() => _membershipBusy = false);
     }
+  }
+
+  Future<void> _joinGuildEverywhere(String userId, String guildId) async {
+    final now = DateTime.now().toIso8601String();
+    final attempts = <Future<void> Function()>[
+      () => Supabase.instance.client.from('community_members').upsert({
+            'user_id': userId,
+            'community_id': guildId,
+            'role': 'member',
+            'joined_at': now,
+          }, onConflict: 'user_id,community_id'),
+      () => Supabase.instance.client.from('guild_memberships').upsert({
+            'user_id': userId,
+            'guild_id': guildId,
+            'created_at': now,
+          }, onConflict: 'user_id,guild_id'),
+      () => Supabase.instance.client.from('profile_guilds').upsert({
+            'user_id': userId,
+            'guild_id': guildId,
+            'created_at': now,
+          }, onConflict: 'user_id,guild_id'),
+    ];
+    await _runMembershipAttempts(attempts);
+  }
+
+  Future<void> _leaveGuildEverywhere(String userId, String guildId) async {
+    final attempts = <Future<void> Function()>[
+      () => Supabase.instance.client
+          .from('community_members')
+          .delete()
+          .eq('user_id', userId)
+          .eq('community_id', guildId),
+      () => Supabase.instance.client
+          .from('guild_memberships')
+          .delete()
+          .eq('user_id', userId)
+          .eq('guild_id', guildId),
+      () => Supabase.instance.client
+          .from('profile_guilds')
+          .delete()
+          .eq('user_id', userId)
+          .eq('guild_id', guildId),
+    ];
+    await _runMembershipAttempts(attempts);
+  }
+
+  Future<void> _runMembershipAttempts(List<Future<void> Function()> attempts) async {
+    Object? lastError;
+    for (final attempt in attempts) {
+      try {
+        await attempt();
+        return;
+      } catch (e) {
+        lastError = e;
+      }
+    }
+    if (lastError != null) throw lastError;
   }
 
   @override
@@ -240,7 +309,10 @@ class _GuildList extends StatelessWidget {
     }
 
     return RefreshIndicator(
-      onRefresh: () => Future.value(),
+      onRefresh: () async {
+        final state = context.findAncestorStateOfType<_GuildHomeScreenState>();
+        await state?._loadGuilds();
+      },
       color: AppColors.primary,
       child: ListView.separated(
         padding: const EdgeInsets.all(16),
@@ -292,11 +364,12 @@ class _GuildCard extends StatelessWidget {
           ),
         ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Guild avatar
             Container(
-              width: 52,
-              height: 52,
+              width: 64,
+              height: 64,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -306,18 +379,42 @@ class _GuildCard extends StatelessWidget {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Center(
-                child: Text(
-                  guild.name.isNotEmpty ? guild.name[0].toUpperCase() : 'G',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 22,
-                  ),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: AppColors.border.withOpacity(0.75),
+                  width: 1.2,
                 ),
               ),
+              clipBehavior: Clip.antiAlias,
+              child: guild.imageUrl.trim().isEmpty
+                  ? Center(
+                      child: Text(
+                        guild.name.isNotEmpty ? guild.name[0].toUpperCase() : 'G',
+                         style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 24,
+                        ),
+                      ),
+                    )
+                  : guild.imageUrl.startsWith('assets/')
+                      ? Image.asset(guild.imageUrl, fit: BoxFit.cover)
+                      : Image.network(
+                          guild.imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Center(
+                            child: Text(
+                              guild.name.isNotEmpty
+                                  ? guild.name[0].toUpperCase()
+                                  : 'G',
+                               style: const TextStyle(
+                                 color: Colors.white,
+                                 fontWeight: FontWeight.w900,
+                                 fontSize: 24,
+                               ),
+                            ),
+                          ),
+                        ),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -358,7 +455,7 @@ class _GuildCard extends StatelessWidget {
                         ),
                     ],
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 6),
                   Text(
                     guild.description ?? 'An Artyug creative guild',
                     style: const TextStyle(
@@ -425,8 +522,11 @@ class _GuildCard extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 10),
-            Column(
+            const SizedBox(width: 12),
+            SizedBox(
+              width: 104,
+              child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 TextButton(
                   onPressed: onJoin,
@@ -439,7 +539,7 @@ class _GuildCard extends StatelessWidget {
                         const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10)),
-                    minimumSize: Size.zero,
+                    minimumSize: const Size.fromHeight(40),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   child: Text(
@@ -516,6 +616,7 @@ class _GuildCard extends StatelessWidget {
                 ),
               ],
             ),
+            ),
           ],
         ),
       ),
@@ -571,6 +672,7 @@ class GuildModel {
   final String id;
   final String name;
   final String? description;
+  final String imageUrl;
   final int memberCount;
   final int postCount;
   final int channelCount;
@@ -581,6 +683,7 @@ class GuildModel {
     required this.id,
     required this.name,
     this.description,
+    this.imageUrl = '',
     required this.memberCount,
     this.postCount = 0,
     this.channelCount = 3,
@@ -600,6 +703,7 @@ class GuildModel {
       id: json['id'] as String,
       name: name,
       description: json['description'] as String? ?? presets.description,
+      imageUrl: CanonicalGuilds.preferredImageForCommunityRow(json),
       memberCount: json['member_count'] as int? ?? 0,
       postCount: json['post_count'] as int? ??
           (metadata['post_count'] as int? ?? presets.postCount),
@@ -608,6 +712,30 @@ class GuildModel {
       ruleCount: json['rule_count'] as int? ??
           (metadata['rule_count'] as int? ?? presets.ruleCount),
       topics: topics.isNotEmpty ? topics : presets.topics,
+    );
+  }
+
+  GuildModel copyWith({
+    String? id,
+    String? name,
+    String? description,
+    String? imageUrl,
+    int? memberCount,
+    int? postCount,
+    int? channelCount,
+    int? ruleCount,
+    List<String>? topics,
+  }) {
+    return GuildModel(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      description: description ?? this.description,
+      imageUrl: imageUrl ?? this.imageUrl,
+      memberCount: memberCount ?? this.memberCount,
+      postCount: postCount ?? this.postCount,
+      channelCount: channelCount ?? this.channelCount,
+      ruleCount: ruleCount ?? this.ruleCount,
+      topics: topics ?? this.topics,
     );
   }
 
@@ -625,6 +753,7 @@ class GuildModel {
           id: 'guild-contemporary',
           name: 'Artyug Community',
           description: 'An iconic community curated thoughtfully just for you.',
+          imageUrl: 'assets/guilds/artyug.png',
           memberCount: 14,
           postCount: 74,
           channelCount: 6,
@@ -635,6 +764,7 @@ class GuildModel {
           id: 'guild-digital',
           name: 'Motojojo',
           description: 'Creators and collectors in the Motojojo circle.',
+          imageUrl: 'assets/guilds/motojojo.png',
           memberCount: 12,
           postCount: 52,
           channelCount: 5,
@@ -645,6 +775,7 @@ class GuildModel {
           id: 'guild-traditional',
           name: 'Webcoin Labs',
           description: 'Webcoin Labs guild - experiments, drops, and dialogue.',
+          imageUrl: 'assets/guilds/webcoinlabs.jpg',
           memberCount: 10,
           postCount: 31,
           channelCount: 7,

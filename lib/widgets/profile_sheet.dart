@@ -57,7 +57,7 @@ class _ProfileSheetState extends State<_ProfileSheet> {
           .single();
       if (!mounted) return;
       setState(() {
-        _profile = data as Map<String, dynamic>;
+        _profile = data;
         _loading = false;
       });
     } catch (_) {
@@ -230,7 +230,7 @@ class _ProfileSheetState extends State<_ProfileSheet> {
                             const SizedBox(height: 6),
                             Center(
                               child: Text(
-                                _capitalise(artistType),
+                                _friendlyArtistType(artistType),
                                 style: const TextStyle(
                                   color: AppColors.textTertiary,
                                   fontSize: 12,
@@ -341,8 +341,15 @@ class _ProfileSheetState extends State<_ProfileSheet> {
     return '$visible***@${parts[1]}';
   }
 
-  String _capitalise(String s) =>
-      s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
+  String _friendlyArtistType(String s) {
+    final normalized = s.trim().replaceAll('_', ' ').replaceAll('-', ' ');
+    if (normalized.isEmpty) return '';
+    return normalized
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .map((part) => '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}')
+        .join(' ');
+  }
 
   String _compact(int n) {
     if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';

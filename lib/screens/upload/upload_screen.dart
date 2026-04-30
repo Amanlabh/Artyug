@@ -41,7 +41,7 @@ class _UploadScreenState extends State<UploadScreen> {
     'Other',
   ];
 
-  static const int _maxImages = 4;
+  static const int _maxImages = 5;
 
   @override
   void dispose() {

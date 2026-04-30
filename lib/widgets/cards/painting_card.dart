@@ -68,13 +68,105 @@ class _PaintingCardState extends State<PaintingCard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              MarketplaceMediaFrame(
-                imageUrl: painting.resolvedImageUrl,
-                aspectRatio: 1,
-                borderRadius: BorderRadius.zero,
+              Stack(
+                children: [
+                  MarketplaceMediaFrame(
+                    imageUrl: painting.resolvedImageUrl,
+                    aspectRatio: 1,
+                    borderRadius: BorderRadius.zero,
+                  ),
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.58),
+                          ],
+                          stops: const [0.62, 1],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    right: 10,
+                    bottom: 10,
+                    child: Container(
+                      constraints: const BoxConstraints(maxWidth: 180),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.42),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.16),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircleAvatar(
+                            radius: 10,
+                            backgroundColor:
+                                AppColors.primary.withValues(alpha: 0.18),
+                            foregroundImage:
+                                painting.resolvedArtistAvatarUrl != null &&
+                                        painting.resolvedArtistAvatarUrl!
+                                            .trim()
+                                            .isNotEmpty
+                                    ? NetworkImage(
+                                        painting.resolvedArtistAvatarUrl!,
+                                      )
+                                    : null,
+                            child: Text(
+                              ((painting.artistDisplayName ?? 'A')
+                                              .trim()
+                                              .isNotEmpty
+                                          ? (painting.artistDisplayName ?? 'A')
+                                              .trim()
+                                              .substring(0, 1)
+                                          : 'A')
+                                      .toUpperCase(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              painting.artistDisplayName ?? 'Artyug Artist',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          if (painting.artistIsVerified ?? false) ...[
+                            const SizedBox(width: 4),
+                            const Icon(
+                              Icons.verified_rounded,
+                              size: 13,
+                              color: AppColors.info,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(0, 12, 0, 0),
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
                 child: Text(
                   painting.title,
                   maxLines: 2,
@@ -87,22 +179,9 @@ class _PaintingCardState extends State<PaintingCard> {
                   ),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(0, 6, 0, 0),
-                child: Text(
-                  painting.artistDisplayName ?? 'Artyug Artist',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: AppColors.textSecondaryOf(context),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
               if (specs.isNotEmpty)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(0, 6, 0, 0),
+                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
                   child: Text(
                     specs,
                     maxLines: 2,
@@ -116,7 +195,7 @@ class _PaintingCardState extends State<PaintingCard> {
                 ),
               if (painting.price != null)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(0, 8, 0, 2),
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
                   child: Text(
                     painting.displayPrice.replaceAll('â‚¹', 'Rs. '),
                     style: TextStyle(

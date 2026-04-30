@@ -14,6 +14,7 @@ import '../../core/utils/supabase_media_url.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/painting.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/app_mode_provider.dart';
 import '../../providers/feed_provider.dart';
 import '../../providers/feed_view_mode_provider.dart';
 import '../../providers/main_tab_provider.dart';
@@ -109,7 +110,7 @@ class _FeedScreenState extends State<FeedScreen> {
           (e) => _CollectionItem(
             title: '${e.name} Collection',
             volume:
-                '${e.count} items • ${e.likes} likes • ₹${e.volume.toStringAsFixed(0)} volume',
+                '${e.count} items â€¢ ${e.likes} likes â€¢ â‚¹${e.volume.toStringAsFixed(0)} volume',
             cover: e.cover,
           ),
         )
@@ -144,7 +145,7 @@ class _FeedScreenState extends State<FeedScreen> {
           (e) => _ArtistItem(
             id: e.id,
             name: e.name,
-            stat: '${e.works} works • ${e.likes} likes',
+            stat: '${e.works} works â€¢ ${e.likes} likes',
             avatar: e.avatar,
           ),
         )
@@ -277,6 +278,7 @@ class _FeedScreenState extends State<FeedScreen> {
             name: (name?.isNotEmpty ?? false) ? name! : 'Artyug Community',
             description: _communityDescription(row),
             members: '${_formatCount(memberCount)} members',
+            image: CanonicalGuilds.preferredImageForCommunityRow(row),
           );
         }),
       );
@@ -565,7 +567,9 @@ class _FeedScreenState extends State<FeedScreen> {
     if (hash.startsWith('0x')) return null;
     final isBase58 = RegExp(r'^[1-9A-HJ-NP-Za-km-z]{43,128}$').hasMatch(hash);
     if (!isBase58) return null;
-    return AppConfig.buildSolanaExplorerUrl(hash, mode: AppConfig.chainMode);
+    final runtimeMode =
+        context.read<AppModeProvider>().isLiveMode ? ChainMode.mainnet : ChainMode.devnet;
+    return AppConfig.buildSolanaExplorerUrl(hash, mode: runtimeMode);
   }
 
   String? _recentActivityHashFromRow(Map<String, dynamic> row) {
@@ -1215,7 +1219,7 @@ class _FeaturedStudiosStrip extends StatelessWidget {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          '$works works • $collections collections',
+                          '$works works â€¢ $collections collections',
                           style: TextStyle(
                             color: AppColors.textSecondaryOf(context),
                             fontSize: 12,
@@ -1606,7 +1610,7 @@ class _EcosystemSplitFeed extends StatelessWidget {
   }
 }
 
-// ── Thread Feed — compact social-post layout, closer to Twitter ─────────────
+// â”€â”€ Thread Feed â€” compact social-post layout, closer to Twitter â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class _ThreadGrid extends StatelessWidget {
   final List<PaintingModel> paintings;
   final ValueChanged<String> onLike;
@@ -1724,7 +1728,7 @@ class _ThreadPostCard extends StatelessWidget {
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          '@$handle · ${painting.createdAt == null ? 'now' : _relativeTime(painting.createdAt!)}',
+                          '@$handle Â· ${painting.createdAt == null ? 'now' : _relativeTime(painting.createdAt!)}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -1770,13 +1774,6 @@ class _ThreadPostCard extends StatelessWidget {
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      _ThreadAction(
-                        icon: Icons.chat_bubble_outline_rounded,
-                        label: painting.viewsCount > 0
-                            ? '${painting.viewsCount}'
-                            : '',
-                      ),
-                      const SizedBox(width: 24),
                       _ThreadAction(
                         icon: Icons.repeat_rounded,
                         label: painting.purchasesCount > 0
@@ -1905,7 +1902,7 @@ class _EcosystemArtworkCard extends StatelessWidget {
             .trim();
     final categoryLabel = _homepageCategoryLabel(painting);
     final buyLabel = painting.price != null
-        ? 'Buy now · Rs. ${painting.price!.toStringAsFixed(0)}'
+        ? 'Buy now Â· Rs. ${painting.price!.toStringAsFixed(0)}'
         : 'Buy now';
 
     return InkWell(
@@ -2351,7 +2348,7 @@ class _LiveAuctionsNowRail extends StatelessWidget {
                               color: AppColors.textPrimaryOf(context),
                               fontWeight: FontWeight.w800)),
                       const SizedBox(height: 6),
-                      Text('Current bid: ₹${high.toStringAsFixed(0)}',
+                      Text('Current bid: â‚¹${high.toStringAsFixed(0)}',
                           style: TextStyle(
                               color: AppColors.textSecondaryOf(context),
                               fontSize: 12)),
@@ -2413,17 +2410,27 @@ class _SmartEmptyCard extends StatelessWidget {
 }
 
 String _relativeTime(DateTime time) {
-  final d = time.difference(DateTime.now());
-  final past = d.isNegative;
-  final abs = d.abs();
-  if (abs.inMinutes < 60) return '${abs.inMinutes}m ${past ? 'ago' : 'left'}';
-  if (abs.inHours < 24) return '${abs.inHours}h ${past ? 'ago' : 'left'}';
-  return '${abs.inDays}d ${past ? 'ago' : 'left'}';
+  final diff = DateTime.now().difference(time);
+  final abs = diff.abs();
+  if (abs.inMinutes < 1) return 'now';
+  if (abs.inMinutes < 60) return '${abs.inMinutes}m';
+  if (abs.inHours < 24) return '${abs.inHours}h';
+  if (abs.inDays < 7) return '${abs.inDays}d';
+  return '${(abs.inDays / 7).floor()}w';
 }
 
 String _relativeAuctionEndLabel(DateTime time) {
-  final relative = _relativeTime(time);
-  return relative.contains('ago') ? 'Ended $relative' : 'Ends in $relative';
+  final d = time.difference(DateTime.now());
+  final past = d.isNegative;
+  final abs = d.abs();
+  final relative = abs.inMinutes < 1
+      ? 'now'
+      : abs.inMinutes < 60
+          ? '${abs.inMinutes}m'
+          : abs.inHours < 24
+              ? '${abs.inHours}h'
+              : '${abs.inDays}d';
+  return past ? 'Ended $relative ago' : 'Ends in $relative';
 }
 
 class _SectionHeader extends StatelessWidget {
@@ -2734,15 +2741,35 @@ class _FeaturedArtRailState extends State<_FeaturedArtRail> {
                                 ),
                               ),
                               const SizedBox(height: 4),
-                              Text(
-                                p.artistDisplayName ?? 'Artyug Artist',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Color(0xFFE9E9EC),
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                              Row(
+                                children: [
+                                  _AvatarWithFallback(
+                                    url: p.resolvedArtistAvatarUrl ?? '',
+                                    radius: 9,
+                                    label: p.artistDisplayName ?? 'Artyug Artist',
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      p.artistDisplayName ?? 'Artyug Artist',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: Color(0xFFE9E9EC),
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                  if (p.artistIsVerified ?? false) ...[
+                                    const SizedBox(width: 4),
+                                    const Icon(
+                                      Icons.verified_rounded,
+                                      size: 14,
+                                      color: AppColors.info,
+                                    ),
+                                  ],
+                                ],
                               ),
                             ],
                           ),
@@ -3483,6 +3510,8 @@ class _CommunitiesRow extends StatelessWidget {
         separatorBuilder: (_, __) => const SizedBox(width: 12),
         itemBuilder: (context, index) {
           final community = communities[index];
+          final image = community.image.trim();
+          final isAsset = image.startsWith('assets/');
           return InkWell(
             onTap: onTap,
             borderRadius: BorderRadius.circular(14),
@@ -3498,6 +3527,46 @@ class _CommunitiesRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        height: 72,
+                        width: double.infinity,
+                        color: AppColors.surfaceMutedOf(context),
+                        child: image.isEmpty
+                            ? Center(
+                                child: Text(
+                                  community.name.isNotEmpty
+                                      ? community.name[0].toUpperCase()
+                                      : 'C',
+                                  style: TextStyle(
+                                    color: AppColors.primary,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              )
+                            : isAsset
+                                ? Image.asset(image, fit: BoxFit.cover)
+                                : Image.network(
+                                    image,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Center(
+                                      child: Text(
+                                        community.name.isNotEmpty
+                                            ? community.name[0].toUpperCase()
+                                            : 'C',
+                                        style: TextStyle(
+                                          color: AppColors.primary,
+                                          fontSize: 24,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
                     Text(community.name,
                         style: TextStyle(
                             color: AppColors.textPrimaryOf(context),
@@ -3693,9 +3762,9 @@ class _RecentActivityItem {
   String get displayPriceAndTime {
     final amountText = amount == null
         ? 'Amount unavailable'
-        : '₹${amount!.toStringAsFixed(0)}';
+        : 'â‚¹${amount!.toStringAsFixed(0)}';
     final timeText = _formatRelativeTime(purchasedAt);
-    return '$amountText • $timeText';
+    return '$amountText â€¢ $timeText';
   }
 
   static String _formatRelativeTime(DateTime? date) {
@@ -3726,9 +3795,13 @@ class _CommunityItem {
   final String name;
   final String description;
   final String members;
+  final String image;
 
   const _CommunityItem(
-      {required this.name, required this.description, required this.members});
+      {required this.name,
+      required this.description,
+      required this.members,
+      this.image = ''});
 }
 
 class _CollectionAccumulator {
@@ -3818,18 +3891,21 @@ const _fallbackCommunities = [
     description:
         'An iconic community curated thoughtfully for artists and collectors.',
     members: '14 members',
+    image: 'assets/guilds/artyug.png',
   ),
   _CommunityItem(
     name: 'Motojojo',
     description:
         'Creators and collectors in the Motojojo circle sharing culture and collabs.',
     members: '12 members',
+    image: 'assets/guilds/motojojo.png',
   ),
   _CommunityItem(
     name: 'Webcoin Labs',
     description:
         'Onchain creators exploring drops, experiments, and verified digital ownership.',
     members: '10 members',
+    image: 'assets/guilds/webcoinlabs.jpg',
   ),
 ];
 

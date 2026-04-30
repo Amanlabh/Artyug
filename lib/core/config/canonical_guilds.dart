@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../utils/supabase_media_url.dart';
 
 /// The product surface shows exactly three official guilds: Artyug, Motojojo,
 /// Webcoin Labs. Matching is fuzzy on [communities.name] so existing DB rows
@@ -27,6 +28,22 @@ class CanonicalGuilds {
     final list = items.where((e) => matchesOfficialName(nameOf(e))).toList();
     list.sort((a, b) => sortKey(nameOf(a)).compareTo(sortKey(nameOf(b))));
     return list;
+  }
+
+  static String? officialAssetForName(String? name) {
+    final n = (name ?? '').toLowerCase();
+    if (n.contains('artyug')) return 'assets/guilds/artyug.png';
+    if (n.contains('motojojo')) return 'assets/guilds/motojojo.png';
+    if (n.contains('webcoin')) return 'assets/guilds/webcoinlabs.jpg';
+    return null;
+  }
+
+  static String preferredImageForCommunityRow(Map<String, dynamic> row) {
+    final avatar = SupabaseMediaUrl.resolve(row['avatar_url'] as String?);
+    if (avatar.isNotEmpty) return avatar;
+    final cover = SupabaseMediaUrl.resolve(row['cover_image_url'] as String?);
+    if (cover.isNotEmpty) return cover;
+    return officialAssetForName(row['name'] as String?) ?? '';
   }
 
   /// Fetches all communities from Supabase and returns only the three official guilds.

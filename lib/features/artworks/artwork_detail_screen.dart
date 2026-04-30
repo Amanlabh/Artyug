@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -410,7 +411,7 @@ class _MediaColumn extends StatelessWidget {
               separatorBuilder: (_, __) => const SizedBox(width: 10),
               itemBuilder: (context, index) {
                 final active = index == selectedIndex;
-                return InkWell(
+                Widget thumb = InkWell(
                   onTap: () => onSelectImage(index),
                   borderRadius: BorderRadius.circular(14),
                   child: AnimatedContainer(
@@ -438,6 +439,14 @@ class _MediaColumn extends StatelessWidget {
                     ),
                   ),
                 );
+                if (kIsWeb) {
+                  thumb = MouseRegion(
+                    onEnter: (_) => onSelectImage(index),
+                    cursor: SystemMouseCursors.click,
+                    child: thumb,
+                  );
+                }
+                return thumb;
               },
             ),
           ),
@@ -996,13 +1005,19 @@ class _TrustRow extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth < 640) {
-          return Column(
-            children: [
-              for (var i = 0; i < items.length; i++) ...[
-                if (i > 0) const SizedBox(height: 10),
-                items[i],
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (var i = 0; i < items.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 10),
+                  SizedBox(
+                    width: 190,
+                    child: items[i],
+                  ),
+                ],
               ],
-            ],
+            ),
           );
         }
         return Row(

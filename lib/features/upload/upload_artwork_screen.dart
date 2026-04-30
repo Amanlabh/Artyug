@@ -15,6 +15,8 @@ class UploadArtworkScreen extends StatefulWidget {
 
 class _UploadArtworkScreenState extends State<UploadArtworkScreen>
     with TickerProviderStateMixin {
+  static const int _maxImages = 5;
+
   final _picker = ImagePicker();
   final _titleCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
@@ -134,7 +136,23 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen>
 
   Future<void> _pickImages() async {
     final picked = await _picker.pickMultiImage(imageQuality: 85);
-    if (picked.isNotEmpty) setState(() => _images = picked.take(8).toList());
+    if (picked.isEmpty) return;
+    final remainingSlots = _maxImages - _images.length;
+    if (remainingSlots <= 0) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You can upload up to 5 photos only.')),
+      );
+      return;
+    }
+    setState(() {
+      _images.addAll(picked.take(remainingSlots));
+    });
+    if (picked.length > remainingSlots && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Only the first 5 photos were added.')),
+      );
+    }
   }
 
   Future<void> _pickAuctionEndDate() async {
@@ -442,7 +460,8 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen>
                       crossAxisCount: 2,
                       crossAxisSpacing: 10,
                       mainAxisSpacing: 10),
-                  itemCount: _images.length + 1,
+                  itemCount:
+                      _images.length < _maxImages ? _images.length + 1 : _images.length,
                   itemBuilder: (ctx, i) {
                     if (i == _images.length)
                       return GestureDetector(

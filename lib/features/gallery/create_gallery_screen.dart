@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -15,6 +16,11 @@ class CreateGalleryScreen extends StatefulWidget {
 
 class _CreateGalleryScreenState extends State<CreateGalleryScreen>
     with SingleTickerProviderStateMixin {
+  static const List<String> _studioAssetBuckets = [
+    'shop-assets',
+    'profiles',
+    'paintings',
+  ];
 
   static const _bg      = Color(0xFF0A0C12);
   static const _surface = Color(0xFF181C24);
@@ -75,10 +81,13 @@ class _CreateGalleryScreenState extends State<CreateGalleryScreen>
       if (_coverPhoto != null) {
         final bytes = await File(_coverPhoto!.path).readAsBytes();
         final ext = _coverPhoto!.path.split('.').last;
-        final path = 'gallery-covers/${user.id}_${DateTime.now().millisecondsSinceEpoch}.$ext';
-        await db.storage.from('shop-assets').uploadBinary(path, bytes,
-          fileOptions: FileOptions(contentType: 'image/$ext', upsert: true));
-        avatarUrl = db.storage.from('shop-assets').getPublicUrl(path);
+        final fileName = '${user.id}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+        avatarUrl = await _uploadStudioCover(
+          db: db,
+          bytes: bytes,
+          ext: ext,
+          fileName: fileName,
+        );
       }
 
       final created = await db.from('shops').insert({
@@ -100,11 +109,53 @@ class _CreateGalleryScreenState extends State<CreateGalleryScreen>
       if (mounted) {
         setState(() => _saving = false);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Error: $e'),
+          content: Text(_friendlyCreateGalleryError(e)),
           backgroundColor: Colors.red,
         ));
       }
     }
+  }
+
+  Future<String> _uploadStudioCover({
+    required SupabaseClient db,
+    required Uint8List bytes,
+    required String ext,
+    required String fileName,
+  }) async {
+    final safeExt = ext.toLowerCase();
+    final contentType = 'image/$safeExt';
+    Object? lastError;
+
+    for (final bucket in _studioAssetBuckets) {
+      final path = bucket == 'profiles'
+          ? 'shop-assets/gallery-covers/$fileName'
+          : 'gallery-covers/$fileName';
+      try {
+        await db.storage.from(bucket).uploadBinary(
+          path,
+          bytes,
+          fileOptions: FileOptions(contentType: contentType, upsert: true),
+        );
+        return db.storage.from(bucket).getPublicUrl(path);
+      } catch (e) {
+        lastError = e;
+        final message = e.toString().toLowerCase();
+        final bucketMissing =
+            message.contains('bucket not found') || message.contains('statuscode: 404');
+        if (!bucketMissing) rethrow;
+      }
+    }
+
+    throw lastError ?? Exception('Could not upload studio cover');
+  }
+
+  String _friendlyCreateGalleryError(Object error) {
+    final raw = error.toString();
+    final lower = raw.toLowerCase();
+    if (lower.contains('bucket not found')) {
+      return 'Studio image upload is not configured yet. I tried the available buckets but none were ready.';
+    }
+    return 'Error: $raw';
   }
 
   @override
@@ -191,7 +242,7 @@ class _CreateGalleryScreenState extends State<CreateGalleryScreen>
               onPressed: (_canContinue && !_saving) ? _next : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: _accent,
-                disabledBackgroundColor: _accent.withOpacity(0.25),
+                disabledBackgroundColor: _accent.withValues(alpha: 0.25),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 elevation: 0,

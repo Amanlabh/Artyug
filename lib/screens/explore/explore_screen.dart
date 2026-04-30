@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/supabase_media_url.dart';
+import '../../repositories/painting_repository.dart';
 import '../../widgets/artyug_search_bar.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -973,6 +974,40 @@ class _ArtworkCard extends StatefulWidget {
 
 class _ArtworkCardState extends State<_ArtworkCard> {
   bool _expanded = false;
+  late bool _liked;
+  late int _likesCount;
+  bool _likeBusy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _liked = widget.painting['is_liked'] == true;
+    _likesCount = (widget.painting['likes_count'] as num?)?.toInt() ?? 0;
+  }
+
+  Future<void> _toggleLike() async {
+    if (_likeBusy) return;
+    setState(() {
+      _likeBusy = true;
+      _liked = !_liked;
+      _likesCount += _liked ? 1 : -1;
+      if (_likesCount < 0) _likesCount = 0;
+    });
+    try {
+      await PaintingRepository.toggleLike(widget.painting['id'].toString());
+      widget.painting['is_liked'] = _liked;
+      widget.painting['likes_count'] = _likesCount;
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _liked = !_liked;
+        _likesCount += _liked ? 1 : -1;
+        if (_likesCount < 0) _likesCount = 0;
+      });
+    } finally {
+      if (mounted) setState(() => _likeBusy = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1062,8 +1097,11 @@ class _ArtworkCardState extends State<_ArtworkCard> {
                           ),
                         ),
                         _ActionIcon(
-                          icon: Icons.favorite_border_rounded,
-                          onTap: () {},
+                          icon: _liked
+                              ? Icons.favorite_rounded
+                              : Icons.favorite_border_rounded,
+                          color: _liked ? AppColors.error : null,
+                          onTap: _toggleLike,
                         ),
                         const SizedBox(width: 6),
                         _ActionIcon(
@@ -1140,6 +1178,19 @@ class _ArtworkCardState extends State<_ArtworkCard> {
                         ),
                   ],
                   const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Text(
+                        _likesCount > 0 ? '$_likesCount likes' : 'Like this artwork',
+                        style: TextStyle(
+                          color: AppColors.textTertiaryOf(context),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
                   SizedBox(
                       width: double.infinity,
                       child: FilledButton(
@@ -1190,10 +1241,12 @@ class _ArtworkCardState extends State<_ArtworkCard> {
 class _ActionIcon extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
+  final Color? color;
 
   const _ActionIcon({
     required this.icon,
     required this.onTap,
+    this.color,
   });
 
   @override
@@ -1212,7 +1265,7 @@ class _ActionIcon extends StatelessWidget {
         child: Icon(
           icon,
           size: 17,
-          color: AppColors.textPrimaryOf(context),
+          color: color ?? AppColors.textPrimaryOf(context),
         ),
       ),
     );

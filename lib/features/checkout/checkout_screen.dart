@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/utils/supabase_media_url.dart';
 import '../../core/theme/app_colors.dart';
 import '../../providers/app_mode_provider.dart';
 import '../../providers/auth_provider.dart';
@@ -43,6 +44,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   bool _awaitingWebhook = false;
   PaymentGateway? _awaitingGateway;
   String? _error;
+  int _selectedImageIndex = 0;
 
   CheckoutPaymentMethod? _selectedMethod;
 
@@ -446,6 +448,22 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return raw;
   }
 
+  List<String> _galleryImages(PaintingModel painting) {
+    final urls = <String>[];
+    final primary = painting.resolvedImageUrl.trim();
+    if (primary.isNotEmpty) urls.add(_displayImageUrl(primary));
+    for (final raw in painting.additionalImages ?? const <String>[]) {
+      final resolved = SupabaseMediaUrl.resolve(raw).trim();
+      if (resolved.isNotEmpty) {
+        final normalized = _displayImageUrl(resolved);
+        if (!urls.contains(normalized)) {
+          urls.add(normalized);
+        }
+      }
+    }
+    return urls;
+  }
+
   Widget _buildContent(bool runtimeLive, List<CheckoutPaymentMethod> methods) {
     final p = _painting!;
 
@@ -568,6 +586,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     String? bottomError,
   }) {
     final align = centerText ? TextAlign.center : TextAlign.start;
+    final galleryImages = _galleryImages(p);
     return Column(
       crossAxisAlignment:
           centerText ? CrossAxisAlignment.center : CrossAxisAlignment.stretch,
@@ -583,7 +602,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ),
         ),
         const SizedBox(height: 14),
-        _artworkImageTile(p, maxSide: maxImageSide),
+        _artworkImageTile(
+          p,
+          galleryImages: galleryImages,
+          selectedIndex: _selectedImageIndex.clamp(
+            0,
+            galleryImages.isEmpty ? 0 : galleryImages.length - 1,
+          ),
+          maxSide: maxImageSide,
+        ),
         const SizedBox(height: 20),
         Text(
           p.title,
@@ -793,78 +820,144 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
-  Widget _artworkImageTile(PaintingModel p, {required double maxSide}) {
-    final url = _displayImageUrl(p.imageUrl);
+  Widget _artworkImageTile(
+    PaintingModel p, {
+    required List<String> galleryImages,
+    required int selectedIndex,
+    required double maxSide,
+  }) {
+    final fallbackUrl = _displayImageUrl(p.resolvedImageUrl);
+    final url = galleryImages.isNotEmpty
+        ? galleryImages[selectedIndex.clamp(0, galleryImages.length - 1)]
+        : fallbackUrl;
     return LayoutBuilder(
       builder: (context, constraints) {
         final side = constraints.maxWidth.isFinite
             ? constraints.maxWidth.clamp(200.0, maxSide)
             : maxSide;
         return Center(
-          child: SizedBox(
-            width: side,
-            height: side,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceVariant,
-                  border: Border.all(
-                    color: AppColors.border.withValues(alpha: 0.9),
-                  ),
-                ),
-                child: Image.network(
-                  url,
-                  fit: BoxFit.cover,
-                  width: side,
-                  height: side,
-                  gaplessPlayback: true,
-                  filterQuality: FilterQuality.high,
-                  loadingBuilder: (context, child, progress) {
-                    if (progress == null) return child;
-                    return Center(
-                      child: SizedBox(
-                        width: 36,
-                        height: 36,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          color: AppColors.primary.withValues(alpha: 0.85),
-                          value: progress.expectedTotalBytes != null &&
-                                  progress.expectedTotalBytes! > 0
-                              ? progress.cumulativeBytesLoaded /
-                                  progress.expectedTotalBytes!
-                              : null,
-                        ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: side,
+                height: side,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceVariant,
+                      border: Border.all(
+                        color: AppColors.border.withValues(alpha: 0.9),
                       ),
-                    );
-                  },
-                  errorBuilder: (_, __, ___) => Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.broken_image_outlined,
-                            size: 44,
-                            color: AppColors.textTertiary,
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            'Could not load artwork image',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 12,
+                    ),
+                    child: Image.network(
+                      url,
+                      fit: BoxFit.cover,
+                      width: side,
+                      height: side,
+                      gaplessPlayback: true,
+                      filterQuality: FilterQuality.high,
+                      loadingBuilder: (context, child, progress) {
+                        if (progress == null) return child;
+                        return Center(
+                          child: SizedBox(
+                            width: 36,
+                            height: 36,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: AppColors.primary.withValues(alpha: 0.85),
+                              value: progress.expectedTotalBytes != null &&
+                                      progress.expectedTotalBytes! > 0
+                                  ? progress.cumulativeBytesLoaded /
+                                      progress.expectedTotalBytes!
+                                  : null,
                             ),
                           ),
-                        ],
+                        );
+                      },
+                      errorBuilder: (_, __, ___) => Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.broken_image_outlined,
+                                size: 44,
+                                color: AppColors.textTertiary,
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                'Could not load artwork image',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
+              if (galleryImages.length > 1) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 72,
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    scrollDirection: Axis.horizontal,
+                    itemCount: galleryImages.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 8),
+                    itemBuilder: (context, index) {
+                      final active = index == selectedIndex;
+                      Widget thumb = InkWell(
+                        onTap: () =>
+                            setState(() => _selectedImageIndex = index),
+                        borderRadius: BorderRadius.circular(14),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 160),
+                          width: 72,
+                          padding: const EdgeInsets.all(3),
+                          decoration: BoxDecoration(
+                            color: active
+                                ? AppColors.primary.withValues(alpha: 0.14)
+                                : AppColors.surface,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: active
+                                  ? AppColors.primary
+                                  : AppColors.border.withValues(alpha: 0.9),
+                            ),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.network(
+                              galleryImages[index],
+                              fit: BoxFit.cover,
+                              gaplessPlayback: true,
+                            ),
+                          ),
+                        ),
+                      );
+                      if (kIsWeb) {
+                        thumb = MouseRegion(
+                          onEnter: (_) =>
+                              setState(() => _selectedImageIndex = index),
+                          cursor: SystemMouseCursors.click,
+                          child: thumb,
+                        );
+                      }
+                      return thumb;
+                    },
+                  ),
+                ),
+              ],
+            ],
           ),
         );
       },
