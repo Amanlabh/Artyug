@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:uuid/uuid.dart';
 
 import '../core/config/app_config.dart';
@@ -27,6 +28,10 @@ class OrderResult {
 class OrderRepository {
   static final _client = SupabaseClientHelper.db;
   static const _uuid = Uuid();
+  static const _gatewayMetadataColumns = <String>{
+    'razorpay_order_id',
+    'razorpay_payment_id',
+  };
 
   static Future<OrderResult?> _findExistingLiveOrderByPaymentId(
     String razorpayPaymentId,
@@ -221,7 +226,9 @@ class OrderRepository {
     final qrCode = 'QR-${_randomAlphanumeric(10)}';
 
     // Insert order with live Razorpay details
-    await _client.from('orders').insert({
+    await _insertWithOptionalColumns(
+      table: 'orders',
+      payload: {
       'id': orderId,
       'artwork_id': paintingId,
       'artwork_title': painting.title,
@@ -241,7 +248,9 @@ class OrderRepository {
       'authenticity_enabled': true,
       'certificate_id': certId,
       'purchase_mode': 'live',
-    });
+      },
+      optionalColumns: _gatewayMetadataColumns,
+    );
 
     // Mark painting as sold so it can't be bought again
     try {
@@ -282,7 +291,9 @@ class OrderRepository {
     }
 
     // Insert certificate with blockchain hash
-    await _client.from('certificates').insert({
+    await _insertWithOptionalColumns(
+      table: 'certificates',
+      payload: {
       'id': certId,
       'order_id': orderId,
       'artwork_id': paintingId,
@@ -299,7 +310,9 @@ class OrderRepository {
       'current_market_price': amountPaid * 1.15,
       'payment_method': 'razorpay',
       'razorpay_order_id': razorpayOrderId,
-    });
+      },
+      optionalColumns: _gatewayMetadataColumns,
+    );
 
     final orderData =
         await _client.from('orders').select().eq('id', orderId).single();
@@ -352,5 +365,37 @@ class OrderRepository {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     return List.generate(length, (_) => chars[Random().nextInt(chars.length)])
         .join();
+  }
+
+  static Future<void> _insertWithOptionalColumns({
+    required String table,
+    required Map<String, dynamic> payload,
+    Set<String> optionalColumns = const <String>{},
+  }) async {
+    final sanitized = Map<String, dynamic>.from(payload);
+
+    while (true) {
+      try {
+        await _client.from(table).insert(sanitized);
+        return;
+      } on PostgrestException catch (e) {
+        final missingColumn = _extractMissingColumn(e.message);
+        if (missingColumn == null ||
+            !optionalColumns.contains(missingColumn) ||
+            !sanitized.containsKey(missingColumn)) {
+          rethrow;
+        }
+        sanitized.remove(missingColumn);
+        debugPrint(
+          '[OrderRepository] Skipping unsupported column '
+          '$missingColumn on $table insert.',
+        );
+      }
+    }
+  }
+
+  static String? _extractMissingColumn(String message) {
+    final match = RegExp(r"'([^']+)' column").firstMatch(message);
+    return match?.group(1);
   }
 }

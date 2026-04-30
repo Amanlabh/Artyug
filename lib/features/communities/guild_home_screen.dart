@@ -139,60 +139,25 @@ class _GuildHomeScreenState extends State<GuildHomeScreen>
   }
 
   Future<void> _joinGuildEverywhere(String userId, String guildId) async {
-    final now = DateTime.now().toIso8601String();
-    final attempts = <Future<void> Function()>[
-      () => Supabase.instance.client.from('community_members').upsert({
-            'user_id': userId,
-            'community_id': guildId,
-            'role': 'member',
-            'joined_at': now,
-          }, onConflict: 'user_id,community_id'),
-      () => Supabase.instance.client.from('guild_memberships').upsert({
-            'user_id': userId,
-            'guild_id': guildId,
-            'created_at': now,
-          }, onConflict: 'user_id,guild_id'),
-      () => Supabase.instance.client.from('profile_guilds').upsert({
-            'user_id': userId,
-            'guild_id': guildId,
-            'created_at': now,
-          }, onConflict: 'user_id,guild_id'),
-    ];
-    await _runMembershipAttempts(attempts);
+    // Only write to community_members — the canonical membership table.
+    // guild_memberships / profile_guilds are optional aliases that may not exist.
+    await Supabase.instance.client.from('community_members').upsert(
+      {
+        'user_id': userId,
+        'community_id': guildId,
+        'role': 'member',
+        'joined_at': DateTime.now().toIso8601String(),
+      },
+      onConflict: 'user_id,community_id',
+    );
   }
 
   Future<void> _leaveGuildEverywhere(String userId, String guildId) async {
-    final attempts = <Future<void> Function()>[
-      () => Supabase.instance.client
-          .from('community_members')
-          .delete()
-          .eq('user_id', userId)
-          .eq('community_id', guildId),
-      () => Supabase.instance.client
-          .from('guild_memberships')
-          .delete()
-          .eq('user_id', userId)
-          .eq('guild_id', guildId),
-      () => Supabase.instance.client
-          .from('profile_guilds')
-          .delete()
-          .eq('user_id', userId)
-          .eq('guild_id', guildId),
-    ];
-    await _runMembershipAttempts(attempts);
-  }
-
-  Future<void> _runMembershipAttempts(List<Future<void> Function()> attempts) async {
-    Object? lastError;
-    for (final attempt in attempts) {
-      try {
-        await attempt();
-        return;
-      } catch (e) {
-        lastError = e;
-      }
-    }
-    if (lastError != null) throw lastError;
+    await Supabase.instance.client
+        .from('community_members')
+        .delete()
+        .eq('user_id', userId)
+        .eq('community_id', guildId);
   }
 
   @override
@@ -366,55 +331,49 @@ class _GuildCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Guild avatar
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.primary.withOpacity(0.7),
-                    AppColors.primary,
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: AppColors.border.withOpacity(0.75),
-                  width: 1.2,
-                ),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: guild.imageUrl.trim().isEmpty
-                  ? Center(
-                      child: Text(
-                        guild.name.isNotEmpty ? guild.name[0].toUpperCase() : 'G',
-                         style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 24,
-                        ),
-                      ),
-                    )
-                  : guild.imageUrl.startsWith('assets/')
-                      ? Image.asset(guild.imageUrl, fit: BoxFit.cover)
-                      : Image.network(
-                          guild.imageUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Center(
-                            child: Text(
-                              guild.name.isNotEmpty
-                                  ? guild.name[0].toUpperCase()
-                                  : 'G',
-                               style: const TextStyle(
-                                 color: Colors.white,
-                                 fontWeight: FontWeight.w900,
-                                 fontSize: 24,
-                               ),
-                            ),
+            // Guild avatar — circular, with asset/network/fallback
+            ClipOval(
+              child: Container(
+                width: 64,
+                height: 64,
+                color: AppColors.primary,
+                child: guild.imageUrl.trim().isEmpty
+                    ? Center(
+                        child: Text(
+                          guild.name.isNotEmpty ? guild.name[0].toUpperCase() : 'G',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 24,
                           ),
                         ),
+                      )
+                    : guild.imageUrl.startsWith('assets/')
+                        ? Image.asset(
+                            guild.imageUrl,
+                            fit: BoxFit.cover,
+                            width: 64,
+                            height: 64,
+                          )
+                        : Image.network(
+                            guild.imageUrl,
+                            fit: BoxFit.cover,
+                            width: 64,
+                            height: 64,
+                            errorBuilder: (_, __, ___) => Center(
+                              child: Text(
+                                guild.name.isNotEmpty
+                                    ? guild.name[0].toUpperCase()
+                                    : 'G',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 24,
+                                ),
+                              ),
+                            ),
+                          ),
+              ),
             ),
             const SizedBox(width: 14),
             Expanded(

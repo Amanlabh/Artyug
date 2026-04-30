@@ -597,7 +597,7 @@ class OrderDetailScreen extends StatelessWidget {
                           const SizedBox(height: 12),
                           _Row(
                             'Amount',
-                            order.displayAmount.replaceAll('â‚¹', '₹'),
+                            order.displayAmount.replaceAll('₹', '₹'),
                           ),
                           if (order.paymentMethod?.isNotEmpty == true) ...[
                             const SizedBox(height: 12),

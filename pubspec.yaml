@@ -96,5 +96,6 @@ flutter:
     - .env                         # Environment variables
     - assets/
     - assets/images/
+    - assets/guilds/
 
 

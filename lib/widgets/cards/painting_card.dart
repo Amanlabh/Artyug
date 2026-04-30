@@ -1,34 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-
-import '../../core/theme/app_colors.dart';
-import '../../models/painting.dart';
-import '../feed/marketplace_media.dart';
-
-/// Premium marketplace painting card used across feed/discovery surfaces.
-class PaintingCard extends StatefulWidget {
-  final PaintingModel painting;
+
+import '../../core/theme/app_colors.dart';
+import '../../models/painting.dart';
+import '../feed/marketplace_media.dart';
+
+/// Premium marketplace painting card used across feed/discovery surfaces.
+class PaintingCard extends StatefulWidget {
+  final PaintingModel painting;
   final VoidCallback? onLike;
   final VoidCallback? onTap;
   final bool isLiked;
   final bool showBuyButton;
-
-  const PaintingCard({
-    super.key,
-    required this.painting,
+
+  const PaintingCard({
+    super.key,
+    required this.painting,
     this.onLike,
     this.onTap,
     this.isLiked = false,
     this.showBuyButton = true,
   });
-
-  @override
-  State<PaintingCard> createState() => _PaintingCardState();
-}
-
-class _PaintingCardState extends State<PaintingCard> {
-  bool _hovered = false;
-
+
+  @override
+  State<PaintingCard> createState() => _PaintingCardState();
+}
+
+class _PaintingCardState extends State<PaintingCard> {
+  bool _hovered = false;
+
   @override
   Widget build(BuildContext context) {
     final painting = widget.painting;
@@ -42,23 +42,23 @@ class _PaintingCardState extends State<PaintingCard> {
     ].join(', ');
 
     return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOut,
-        transform: Matrix4.translationValues(0, _hovered ? -4.0 : 0.0, 0),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceOf(context),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: _hovered
-                ? AppColors.primary.withValues(alpha: 0.45)
-                : AppColors.borderStrongOf(context),
-            width: _hovered ? 1.5 : 1,
-          ),
-          boxShadow: AppColors.cardShadows(context, hovered: _hovered),
-        ),
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        transform: Matrix4.translationValues(0, _hovered ? -4.0 : 0.0, 0),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceOf(context),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: _hovered
+                ? AppColors.primary.withValues(alpha: 0.45)
+                : AppColors.borderStrongOf(context),
+            width: _hovered ? 1.5 : 1,
+          ),
+          boxShadow: AppColors.cardShadows(context, hovered: _hovered),
+        ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: () {
@@ -197,7 +197,7 @@ class _PaintingCardState extends State<PaintingCard> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
                   child: Text(
-                    painting.displayPrice.replaceAll('â‚¹', 'Rs. '),
+                    painting.displayPrice.replaceAll('₹', 'Rs. '),
                     style: TextStyle(
                       color: AppColors.textPrimaryOf(context),
                       fontSize: 13,

@@ -973,10 +973,10 @@ class _ArtworkCard extends StatefulWidget {
 }
 
 class _ArtworkCardState extends State<_ArtworkCard> {
-  bool _expanded = false;
   late bool _liked;
   late int _likesCount;
   bool _likeBusy = false;
+
 
   @override
   void initState() {
@@ -1017,7 +1017,6 @@ class _ArtworkCardState extends State<_ArtworkCard> {
         profile['display_name'] ?? profile['username'] ?? 'Artist';
     final imageUrl = _explorePaintingImageUrl(painting);
     final title = painting['title'] as String? ?? 'Untitled';
-    final description = (painting['description'] as String? ?? '').trim();
     final medium = (painting['medium'] as String? ?? '').trim();
     final dimensions = (painting['dimensions'] as String? ?? '').trim();
     final price = painting['price'] ?? painting['price_inr'];
@@ -1029,10 +1028,6 @@ class _ArtworkCardState extends State<_ArtworkCard> {
       if (dimensions.isNotEmpty) dimensions,
     ].join('  |  ');
     final priceLabel = _formatPrice(price);
-    final showReadMore = description.length > 72;
-    final visibleDescription = _expanded || !showReadMore
-        ? description
-        : '${description.substring(0, 72).trimRight()}...';
 
     return GestureDetector(
       onTap: () => context.push('/artwork/${painting['id']}'),
@@ -1077,151 +1072,164 @@ class _ArtworkCardState extends State<_ArtworkCard> {
                     ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            priceLabel,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: AppColors.textPrimary,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                        _ActionIcon(
-                          icon: _liked
-                              ? Icons.favorite_rounded
-                              : Icons.favorite_border_rounded,
-                          color: _liked ? AppColors.error : null,
-                          onTap: _toggleLike,
-                        ),
-                        const SizedBox(width: 6),
-                        _ActionIcon(
-                          icon: Icons.add_shopping_cart_outlined,
-                          onTap: () {
-                            if (available) {
-                              context.push('/checkout/${painting['id']}');
-                            }
-                          },
-                        ),
-                      ],
+                  // ── Title ──────────────────────────────────────────────────
+                  Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.textPrimaryOf(context),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      height: 1.25,
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: AppColors.textPrimaryOf(context),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        height: 1.25,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      artistName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: AppColors.textSecondaryOf(context),
-                        fontSize: 11.5,
-                      ),
-                    ),
-                    if (details.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        details,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: AppColors.textTertiaryOf(context),
-                          fontSize: 10.8,
-                          height: 1.35,
-                        ),
-                      ),
-                    ],
-                    if (description.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        visibleDescription,
-                        maxLines: _expanded ? 4 : 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: AppColors.textSecondaryOf(context),
-                          fontSize: 11,
-                          height: 1.4,
-                        ),
-                      ),
-                      if (showReadMore)
-                        GestureDetector(
-                          onTap: () => setState(() => _expanded = !_expanded),
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(
-                              _expanded ? 'Read less' : 'Read more',
-                              style: const TextStyle(
-                                color: AppColors.primary,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ),
-                  ],
-                  const SizedBox(height: 10),
+                  ),
+                  const SizedBox(height: 5),
+                  // ── Artist avatar + name ────────────────────────────────────
                   Row(
                     children: [
-                      Text(
-                        _likesCount > 0 ? '$_likesCount likes' : 'Like this artwork',
-                        style: TextStyle(
-                          color: AppColors.textTertiaryOf(context),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
+                      _buildMiniAvatar(profile),
+                      const SizedBox(width: 5),
+                      Expanded(
+                        child: Text(
+                          artistName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: AppColors.textSecondaryOf(context),
+                            fontSize: 11,
+                          ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: available
-                            ? () => context.push('/checkout/${painting['id']}')
-                            : () => context.push('/artwork/${painting['id']}'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: available
-                              ? AppColors.primary
-                              : AppColors.surfaceMutedOf(context),
-                          foregroundColor: available
-                              ? Colors.white
-                              : AppColors.textSecondaryOf(context),
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
+                  if (details.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      details,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.textTertiaryOf(context),
+                        fontSize: 10,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 7),
+                  // ── Price + like/cart icons ─────────────────────────────────
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
                         child: Text(
-                          available ? 'Buy now' : 'View artwork',
+                          priceLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
+                            color: AppColors.primary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
                       ),
+                      _ActionIcon(
+                        icon: _liked
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
+                        color: _liked ? AppColors.error : null,
+                        onTap: _toggleLike,
+                      ),
+                      const SizedBox(width: 4),
+                      _ActionIcon(
+                        icon: Icons.shopping_bag_outlined,
+                        onTap: () {
+                          if (available) {
+                            context.push('/checkout/${painting['id']}');
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 7),
+                  // ── Buy / View button ───────────────────────────────────────
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: available
+                          ? () => context.push('/checkout/${painting['id']}')
+                          : () => context.push('/artwork/${painting['id']}'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: available
+                            ? AppColors.primary
+                            : AppColors.surfaceMutedOf(context),
+                        foregroundColor: available
+                            ? Colors.white
+                            : AppColors.textSecondaryOf(context),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        minimumSize: const Size(0, 32),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Text(
+                        available ? 'Buy now' : 'View',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
+                  ),
                 ],
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+
+  Widget _buildMiniAvatar(Map<String, dynamic> profile) {
+    final raw = (profile['profile_picture_url'] ?? profile['avatar_url']) as String?;
+    final url = SupabaseMediaUrl.resolve(raw);
+    final name = (profile['display_name'] ?? profile['username'] ?? 'A') as String;
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'A';
+    if (url.isNotEmpty) {
+      return ClipOval(
+        child: CachedNetworkImage(
+          imageUrl: url,
+          width: 18,
+          height: 18,
+          fit: BoxFit.cover,
+          errorWidget: (_, __, ___) => _miniAvatarFallback(initial),
+        ),
+      );
+    }
+    return _miniAvatarFallback(initial);
+  }
+
+  Widget _miniAvatarFallback(String initial) {
+    return Container(
+      width: 18,
+      height: 18,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: AppColors.primary.withOpacity(0.18),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        initial,
+        style: const TextStyle(
+          color: AppColors.primary,
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );
